@@ -112,9 +112,7 @@ export default function Onboarding() {
           >
             TURN ON CAMERA
           </KidsButton>
-          {mock && (
-            <button onClick={startMock} className="text-xs underline text-[#8a7f9e]">Use mock (no camera) for testing</button>
-          )}
+          <button onClick={() => { startMock(); setStep("wave"); say("Wave hello so I can see you!", "wave"); }} className="text-xs underline text-[#8a7f9e]">Use mock (no camera) for testing</button>
         </>
       )}
 

@@ -49,6 +49,25 @@ export default function AirPianoPage() {
     window.setTimeout(() => setMayaState(modeRef.current === "follow" ? "waiting" : "happy"), 300);
   };
 
+  // In follow mode: accept the pairing with the current target note.
+  const hitFollowTarget = (idx: number) => {
+    if (idx === MELODY[melodyIdxRef.current]) {
+      playNote(idx);
+      const next = melodyIdxRef.current + 1;
+      if (next >= MELODY.length) {
+        setMelodyIdx(0);
+        melodyIdxRef.current = 0;
+        setBurst((b) => b + 1);
+        setMayaState("celebrating");
+        voice().speak("Great job!");
+        window.setTimeout(() => setMayaState("waiting"), 900);
+      } else {
+        setMelodyIdx(next);
+        melodyIdxRef.current = next;
+      }
+    }
+  };
+
   // hand → note zone
   useEffect(() => {
     if (!pointer.present) { lastNote.current = -1; setActive(null); return; }
@@ -58,22 +77,7 @@ export default function AirPianoPage() {
     lastNote.current = idx;
 
     if (modeRef.current === "follow") {
-      // only accept the target note
-      if (idx === MELODY[melodyIdxRef.current]) {
-        playNote(idx);
-        const next = melodyIdxRef.current + 1;
-        if (next >= MELODY.length) {
-          setMelodyIdx(0);
-          melodyIdxRef.current = 0;
-          setBurst((b) => b + 1);
-          setMayaState("celebrating");
-          voice().speak("Great job!");
-          window.setTimeout(() => setMayaState("waiting"), 900);
-        } else {
-          setMelodyIdx(next);
-          melodyIdxRef.current = next;
-        }
-      }
+      hitFollowTarget(idx);
       return;
     }
     playNote(idx);
@@ -133,7 +137,7 @@ export default function AirPianoPage() {
       {mock && (
         <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-20 flex gap-2">
           {mode === "follow" ? (
-            <KidsButton variant="secondary" size="md" onClick={() => playNote(target ?? 0)}>
+            <KidsButton variant="secondary" size="md" onClick={() => hitFollowTarget(target ?? 0)}>
               Play {NOTE_NAMES[target ?? 0]} (mock)
             </KidsButton>
           ) : (

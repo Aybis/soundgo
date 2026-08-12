@@ -17,28 +17,28 @@ export default function Home() {
       </div>
 
       {/* hero */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center gap-5 px-5">
+      <div className="relative z-10 h-full flex flex-col items-center justify-center gap-2 px-5">
         {/* logo */}
         <div className="flex items-center gap-2">
           <span className="text-2xl font-black tracking-tight text-[#3a3352]">MAYA</span>
           <span className="px-2 py-0.5 rounded-full bg-[#6d5cff]/10 text-[#6d5cff] text-xs font-extrabold tracking-widest">KIDS</span>
         </div>
 
-        <Character state="happy" message="Hi, explorer! 👋" size={170} />
+        <Character state="happy" message="Hi, explorer! 👋" size={100} />
 
         <div className="text-center">
-          <h1 className="text-4xl font-black text-[#3a3352]">What should we play?</h1>
+          <h1 className="text-3xl font-black text-[#3a3352]">What should we play?</h1>
           <p className="mt-1 text-sm font-semibold text-[#8a7f9e]">Move. Play. Learn.</p>
         </div>
 
         <KidsButton onClick={() => (window.location.href = "/onboarding")}>LET'S PLAY</KidsButton>
 
         {/* world grid */}
-        <div className="grid grid-cols-2 gap-4 w-full max-w-md mt-2">
-          <ActivityTile to="/learn" title="Learn" variant="learn" color="from-[#7cc4ff] to-[#3b9ef5]" sub="Numbers & ABC" />
-          <ActivityTile to="/move" title="Move" variant="move" color="from-[#7ee8c4] to-[#06d6a0]" sub="Play with your body" />
-          <ActivityTile to="/music" title="Music" variant="music" color="from-[#b7a6ff] to-[#6d5cff]" sub="Make sound" />
-          <ActivityTile to="/create" title="Create" variant="create" color="from-[#ffb36b] to-[#ff8c42]" sub="Imagine & draw" />
+        <div className="grid grid-cols-2 gap-2.5 w-full max-w-sm">
+          <ActivityTile compact to="/learn" title="Learn" variant="learn" color="from-[#7cc4ff] to-[#3b9ef5]" sub="Numbers & ABC" />
+          <ActivityTile compact to="/move" title="Move" variant="move" color="from-[#7ee8c4] to-[#06d6a0]" sub="Play with your body" />
+          <ActivityTile compact to="/music" title="Music" variant="music" color="from-[#b7a6ff] to-[#6d5cff]" sub="Make sound" />
+          <ActivityTile compact to="/create" title="Create" variant="create" color="from-[#ffb36b] to-[#ff8c42]" sub="Imagine & draw" />
         </div>
 
         {/* discreet parent entry */}
