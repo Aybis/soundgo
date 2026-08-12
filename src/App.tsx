@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Home from "./app/Home";
 import LearnHub from "./app/LearnHub";
 import MoveHub from "./app/MoveHub";
+import CreateHub from "./app/CreateHub";
 import MusicPage from "./pages/MusicPage";
 import InteractionPage from "./pages/InteractionPage";
 import PlayPage from "./pages/PlayPage";
@@ -11,6 +12,7 @@ import GrabAnswerGame from "./activities/learn/grab-answer/GrabAnswerGame";
 import CopyPoseGame from "./activities/move/copy-pose/CopyPoseGame";
 import SquatGame from "./activities/move/squat/SquatGame";
 import BalanceGame from "./activities/move/balance/BalanceGame";
+import AirWritingGame from "./activities/create/air-writing/AirWritingGame";
 
 const LINKS = [
   { to: "/", label: "home" },
@@ -58,6 +60,8 @@ export default function App() {
         <Route path="/move/copy-pose" element={<CopyPoseGame />} />
         <Route path="/move/squat" element={<SquatGame />} />
         <Route path="/move/balance" element={<BalanceGame />} />
+        <Route path="/create" element={<CreateHub />} />
+        <Route path="/create/air-writing" element={<AirWritingGame />} />
       </Routes>
     </BrowserRouter>
   );

@@ -6,7 +6,7 @@ const CATEGORIES = [
   { id: "learn", emoji: "🔢", title: "Learn", sub: "Numbers, ABC & more", to: "/learn" },
   { id: "move", emoji: "🏃", title: "Move", sub: "Play with your body", to: "/move" },
   { id: "music", emoji: "🎵", title: "Music", sub: "Make sound", to: "/music" },
-  { id: "create", emoji: "🎨", title: "Create", sub: "Imagine & draw", to: null },
+  { id: "create", emoji: "🎨", title: "Create", sub: "Imagine & draw", to: "/create" },
 ];
 
 export default function Home() {

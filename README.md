@@ -24,6 +24,7 @@ Open `http://localhost:5173`, land on the MAYA home, and go into any game. **No 
 | 🤸 **Copy the Pose** | Copy MAYA's move and hold it | click a pose button |
 | 🦵 **Squat Challenge** | Squat down & stand up to count reps | click ⬇ Squat / ⬆ Stand |
 | 🦩 **Balance** | Stand on one leg like a flamingo | click One leg / Both feet |
+| ✍️ **Air Writing** | Trace A-B-C / 1-2-3 in the air | click the trace button |
 | 🎵 **Music** (Soundgo) | Wave hands over two wheels to play chords | — |
 
 ---
@@ -121,7 +122,7 @@ Designed for children, so by default:
 | 3. Finger Math | ✅ | First end-to-end game — the reference implementation |
 | 4. Generic pointer | ✅ | GesturePointer + Grab the Answer (5 subjects) |
 | 5. Body engine | ✅ | Copy the Pose, Squat, Balance |
-| 6. Creative | ⬜ | Air writing/drawing (finger trajectory) |
+| 6. Creative | ✅ | Air Writing (finger trajectory trace, forgiving scoring) |
 | 7. Music | ⬜ | Air Piano, Air Drums, Rhythm (port Soundgo) |
 | 8. AI (optional) | ⬜ | MockAIService lesson/encouragement generation |
 
@@ -132,6 +133,7 @@ Designed for children, so by default:
 - `/lab` — vision debug harness (real + mock provider, FPS overlay, gesture/pose events)
 - `/learn/finger-math`, `/learn/grab-answer` — Learn games
 - `/move/copy-pose`, `/move/squat`, `/move/balance` — Move games
+- `/create/air-writing` — Air Writing (trace letters/numbers)
 - `/music` — the original Soundgo instrument
 
 ---
