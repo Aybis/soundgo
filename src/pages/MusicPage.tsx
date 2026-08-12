@@ -24,6 +24,8 @@ export default function MusicPage() {
   const controlsRef = useRef<Controls>(DEFAULT_CONTROLS);
   const synthRef = useRef<ChordSynth | null>(null);
   const [badge, setBadge] = useState({ root: "C", chord: "maj" });
+  const [playing, setPlaying] = useState(true);
+  const playingRef = useRef(true);
 
   const setControlsBoth = useCallback((c: Controls) => {
     setControls(c);
@@ -236,7 +238,8 @@ export default function MusicPage() {
       const key = res.freqs.map((f) => f.toFixed(1)).join(",") + "|" + res.rootLabel + res.chordName;
       if (key !== lastChordKey) {
         lastChordKey = key;
-        synth.play(res.freqs);
+        if (playingRef.current) synth.play(res.freqs);
+        else synth.stop();
         setBadge({ root: res.rootLabel, chord: res.chordName });
       }
 
@@ -292,6 +295,20 @@ export default function MusicPage() {
         muted
       />
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+
+      {status === "ready" && (
+        <button
+          onClick={() => {
+            const next = !playingRef.current;
+            playingRef.current = next;
+            setPlaying(next);
+            if (!next) synthRef.current?.stop();
+          }}
+          className="absolute top-4 left-4 z-10 px-4 py-1.5 rounded-full bg-black/50 border border-white/10 text-sm text-zinc-200 hover:bg-black/70 backdrop-blur"
+        >
+          {playing ? "⏸ Stop" : "▶ Play"}
+        </button>
+      )}
 
       {status === "ready" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 rounded-full bg-black/50 border border-white/10 text-sm text-zinc-200 backdrop-blur">
