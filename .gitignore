@@ -1,0 +1,12 @@
+# deps
+node_modules/
+dist/
+
+# logs
+*.log
+npm-debug.log*
+
+# editor / os
+.DS_Store
+.vscode/
+.idea/
