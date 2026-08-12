@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import Home from "./app/Home";
+import LearnHub from "./app/LearnHub";
 import MusicPage from "./pages/MusicPage";
 import InteractionPage from "./pages/InteractionPage";
 import PlayPage from "./pages/PlayPage";
 import VisionLab from "./pages/VisionLab";
 import FingerMathGame from "./activities/learn/finger-math/FingerMathGame";
+import GrabAnswerGame from "./activities/learn/grab-answer/GrabAnswerGame";
 
 const LINKS = [
   { to: "/", label: "home" },
@@ -45,7 +47,9 @@ export default function App() {
         <Route path="/interact" element={<InteractionPage />} />
         <Route path="/play" element={<PlayPage />} />
         <Route path="/lab" element={<VisionLab />} />
+        <Route path="/learn" element={<LearnHub />} />
         <Route path="/learn/finger-math" element={<FingerMathGame />} />
+        <Route path="/learn/grab-answer" element={<GrabAnswerGame />} />
       </Routes>
     </BrowserRouter>
   );

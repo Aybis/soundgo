@@ -36,6 +36,7 @@ export function useVision(opts: UseVisionOptions) {
   const engineRef = useRef<VisionEngine | null>(null);
   const busRef = useRef<MotionBus | null>(null);
   const providerRef = useRef<VisionProvider | null>(null);
+  const latestFrameRef = useRef<VisionFrame | null>(null);
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
@@ -66,6 +67,7 @@ export function useVision(opts: UseVisionOptions) {
         targetFps: o.targetFps ?? 30,
         requiresVideo: !o.mock,
         onFrame: (frame) => {
+          latestFrameRef.current = frame;
           handInt.process(frame, frame.timestamp);
           poseInt.process(frame, frame.timestamp);
           o.onFrame?.(frame);
@@ -124,6 +126,8 @@ export function useVision(opts: UseVisionOptions) {
     error,
     stats,
     videoElement: camRef.current!.video,
+    camera: camRef.current!,
+    latestFrame: latestFrameRef,
     bus: busRef.current!,
     provider: providerRef.current,
     start,
