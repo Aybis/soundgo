@@ -10,6 +10,7 @@ import type { FingerPrompt } from "../../../content/finger-math";
 import { TemporalSmoothing } from "../../../vision/stabilization/stabilization";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
+import { ai } from "../../../engine/ai/AIService";
 
 type Phase = "select" | "playing" | "complete";
 
@@ -62,18 +63,32 @@ export default function FingerMathGame() {
     const p = promptRef.current;
     if (!s || !p || phaseRef.current !== "playing") return;
     lastAnswerAt.current = now;
+    const streak = s.streak;
     if (count === p.answer) {
       s.correctNow("Great!");
       setScore(s.score);
       setMayaState("celebrating");
-      setBubble("✨ " + (p.answer === 10 ? "Ten!" : word(p.answer) + "!"));
+      // AI encouragement
+      void ai().encourage({ game: "finger-math", correct: true, streak: streak + 1, attempts: s.attempts, level: levelRef.current, score: s.score }).then((line) => {
+        setBubble("✨ " + line);
+      });
       setAccepted(p.answer);
       setBurst((b) => b + 1);
       setTimeout(() => nextQuestion(s), 1200);
     } else {
       s.wrongNow("Try again!");
       setMayaState("encouraging");
-      setBubble(`Almost! Try ${word(p.answer)}!`);
+      const attempts = s.attempts;
+      if (attempts >= 3) {
+        // child is stuck — offer a hint
+        void ai().hint({ game: "finger-math", correct: false, streak, attempts, level: levelRef.current, score: s.score }).then((h) => {
+          setBubble(`💡 ${h}`);
+        });
+      } else {
+        void ai().encourage({ game: "finger-math", correct: false, streak, attempts, level: levelRef.current, score: s.score }).then((line) => {
+          setBubble(line);
+        });
+      }
     }
   }
 
@@ -250,9 +265,4 @@ export default function FingerMathGame() {
       )}
     </div>
   );
-}
-
-function word(n: number): string {
-  const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
-  return WORDS[n] ?? String(n);
 }

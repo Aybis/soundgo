@@ -29,6 +29,8 @@ Open `http://localhost:5173`, land on the MAYA home, and go into any game. **No 
 | 🥁 **Air Drums** | Swipe into invisible drums | swipe mouse into a drum |
 | 👏 **Follow the Beat** | Clap on beats 1·2·4 | move mouse quickly to clap |
 
+**AI layer** — `src/engine/ai/` is a provider-agnostic service (`AIService` interface + `ai()` singleton). Ships with an offline `MockAIService` (no network) that generates warm, context-aware encouragement, hints when a child is stuck, lesson tips, and adaptive difficulty suggestions. Swapping in a real LLM backend later is a one-class change — games never touch the provider.
+
 ---
 
 ## 🏗️ Architecture
@@ -126,7 +128,7 @@ Designed for children, so by default:
 | 5. Body engine | ✅ | Copy the Pose, Squat, Balance |
 | 6. Creative | ✅ | Air Writing (finger trajectory trace, forgiving scoring) |
 | 7. Music | ✅ | Air Piano, Air Drums, Follow the Beat (port Soundgo audio) |
-| 8. AI (optional) | ⬜ | MockAIService lesson/encouragement generation |
+| 8. AI (optional) | ✅ | AI service (provider-agnostic, offline MockAIService) — encouragement, hints, lessons, adaptive difficulty |
 
 ---
 

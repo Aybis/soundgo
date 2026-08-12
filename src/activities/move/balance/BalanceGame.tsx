@@ -7,6 +7,7 @@ import { CameraStartOverlay } from "../../../components/camera/CameraStartOverla
 import { BALANCE_TARGETS } from "../../../content/move";
 import { voice } from "../../../engine/voice/VoiceService";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
+import { ai } from "../../../engine/ai/AIService";
 
 type Phase = "select" | "playing" | "complete";
 
@@ -62,7 +63,9 @@ export default function BalanceGame() {
         const s = t >= targetRef.current ? 3 : t >= targetRef.current * 0.6 ? 2 : 1;
         setStars(s);
         setMayaState("celebrating");
-        setBubble("Amazing balance! 🎉");
+        void ai().encourage({ game: "balance", correct: true, streak: 1, attempts: 1, level: 1, score: s * 100 }).then((line) => {
+          setBubble(line);
+        });
         setBurst((b) => b + 1);
         voice().speak("Amazing balance!");
         setTimeout(() => setPhase("complete"), 1300);

@@ -22,6 +22,8 @@ export class GameSession {
   score = 0;
   attempts = 0;
   correct = 0;
+  streak = 0;            // correct answers in a row
+  longestStreak = 0;
   level = 1;
   total: number;
 
@@ -50,6 +52,8 @@ export class GameSession {
   correctNow(message = "Great!", extra: Partial<Parameters<FeedbackManager["success"]>[1]> = {}) {
     this.attempts++;
     this.correct++;
+    this.streak++;
+    if (this.streak > this.longestStreak) this.longestStreak = this.streak;
     this.score += 100;
     this.fsm.set("success");
     this.feedback.success(message, { character: "celebrating", ...extra });
@@ -58,6 +62,7 @@ export class GameSession {
   /** A wrong answer: encourage and retry. */
   wrongNow(message = "Try again!", extra: Partial<Parameters<FeedbackManager["encourage"]>[1]> = {}) {
     this.attempts++;
+    this.streak = 0;
     this.fsm.set("retry");
     this.feedback.encourage(message, { character: "encouraging", ...extra });
   }
