@@ -4,6 +4,7 @@ import MusicPage from "./pages/MusicPage";
 import InteractionPage from "./pages/InteractionPage";
 import PlayPage from "./pages/PlayPage";
 import VisionLab from "./pages/VisionLab";
+import FingerMathGame from "./activities/learn/finger-math/FingerMathGame";
 
 const LINKS = [
   { to: "/", label: "home" },
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/interact" element={<InteractionPage />} />
         <Route path="/play" element={<PlayPage />} />
         <Route path="/lab" element={<VisionLab />} />
+        <Route path="/learn/finger-math" element={<FingerMathGame />} />
       </Routes>
     </BrowserRouter>
   );

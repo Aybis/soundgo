@@ -3,7 +3,7 @@ import type { MayaState } from "./types";
 
 interface Props {
   state: MayaState;
-  message?: string;
+  message?: string | null;
   size?: number;
   className?: string;
 }
