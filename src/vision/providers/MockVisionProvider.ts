@@ -54,6 +54,9 @@ export class MockVisionProvider implements VisionProvider {
       landmarks[23] = p(0.4, 0.6); landmarks[24] = p(0.6, 0.6); // hips
       landmarks[25] = p(0.4, 0.7); landmarks[26] = p(0.6, 0.7); // knees
       landmarks[27] = p(0.4, 0.85); landmarks[28] = p(0.6, 0.85); // ankles
+      if (this.scenario.pose.landmarks) {
+        for (const [k, v] of Object.entries(this.scenario.pose.landmarks)) landmarks[Number(k)] = p(v.x, v.y);
+      }
       frame.pose = { landmarks, joints: this.scenario.pose.joints ?? {}, confidence: 0.95 };
     }
 
@@ -71,7 +74,11 @@ export interface MockHand {
 
 export interface MockScenario {
   hands?: MockHand[];
-  pose?: { joints?: { leftKnee?: number; rightKnee?: number; leftHip?: number; rightHip?: number } };
+  pose?: {
+    joints?: { leftKnee?: number; rightKnee?: number; leftHip?: number; rightHip?: number };
+    /** optional landmark overrides (index -> normalized point) to satisfy pose rules */
+    landmarks?: Record<number, { x: number; y: number }>;
+  };
 }
 
 function makeHand(cx: number, cy: number, fingers: number): NormalizedPoint[] {
