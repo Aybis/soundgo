@@ -3,6 +3,7 @@ import Home from "./app/Home";
 import LearnHub from "./app/LearnHub";
 import MoveHub from "./app/MoveHub";
 import CreateHub from "./app/CreateHub";
+import MusicHub from "./app/MusicHub";
 import MusicPage from "./pages/MusicPage";
 import InteractionPage from "./pages/InteractionPage";
 import PlayPage from "./pages/PlayPage";
@@ -13,6 +14,9 @@ import CopyPoseGame from "./activities/move/copy-pose/CopyPoseGame";
 import SquatGame from "./activities/move/squat/SquatGame";
 import BalanceGame from "./activities/move/balance/BalanceGame";
 import AirWritingGame from "./activities/create/air-writing/AirWritingGame";
+import AirPianoPage from "./activities/music/air-piano/AirPianoPage";
+import AirDrumsPage from "./activities/music/air-drums/AirDrumsPage";
+import FollowBeatPage from "./activities/music/beat/FollowBeatPage";
 
 const LINKS = [
   { to: "/", label: "home" },
@@ -49,7 +53,7 @@ export default function App() {
       <Nav />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/music" element={<MusicPage />} />
+        <Route path="/studio" element={<MusicPage />} />
         <Route path="/interact" element={<InteractionPage />} />
         <Route path="/play" element={<PlayPage />} />
         <Route path="/lab" element={<VisionLab />} />
@@ -62,6 +66,10 @@ export default function App() {
         <Route path="/move/balance" element={<BalanceGame />} />
         <Route path="/create" element={<CreateHub />} />
         <Route path="/create/air-writing" element={<AirWritingGame />} />
+        <Route path="/music" element={<MusicHub />} />
+        <Route path="/music/air-piano" element={<AirPianoPage />} />
+        <Route path="/music/air-drums" element={<AirDrumsPage />} />
+        <Route path="/music/beat" element={<FollowBeatPage />} />
       </Routes>
     </BrowserRouter>
   );

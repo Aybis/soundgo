@@ -25,7 +25,9 @@ Open `http://localhost:5173`, land on the MAYA home, and go into any game. **No 
 | 🦵 **Squat Challenge** | Squat down & stand up to count reps | click ⬇ Squat / ⬆ Stand |
 | 🦩 **Balance** | Stand on one leg like a flamingo | click One leg / Both feet |
 | ✍️ **Air Writing** | Trace A-B-C / 1-2-3 in the air | click the trace button |
-| 🎵 **Music** (Soundgo) | Wave hands over two wheels to play chords | — |
+| 🎹 **Air Piano** | Move hand → play notes | move mouse across keys |
+| 🥁 **Air Drums** | Swipe into invisible drums | swipe mouse into a drum |
+| 👏 **Follow the Beat** | Clap on beats 1·2·4 | move mouse quickly to clap |
 
 ---
 
@@ -123,7 +125,7 @@ Designed for children, so by default:
 | 4. Generic pointer | ✅ | GesturePointer + Grab the Answer (5 subjects) |
 | 5. Body engine | ✅ | Copy the Pose, Squat, Balance |
 | 6. Creative | ✅ | Air Writing (finger trajectory trace, forgiving scoring) |
-| 7. Music | ⬜ | Air Piano, Air Drums, Rhythm (port Soundgo) |
+| 7. Music | ✅ | Air Piano, Air Drums, Follow the Beat (port Soundgo audio) |
 | 8. AI (optional) | ⬜ | MockAIService lesson/encouragement generation |
 
 ---
