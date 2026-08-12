@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import MusicPage from "./pages/MusicPage";
 import InteractionPage from "./pages/InteractionPage";
 import PlayPage from "./pages/PlayPage";
+import VisionLab from "./pages/VisionLab";
 
 function Nav() {
   return (
@@ -36,6 +37,16 @@ function Nav() {
       >
         play
       </NavLink>
+      <NavLink
+        to="/lab"
+        className={({ isActive }) =>
+          `px-3 py-1 rounded-full text-xs transition-colors ${
+            isActive ? "bg-[#6d5cff] text-white" : "text-zinc-300 hover:text-white"
+          }`
+        }
+      >
+        lab
+      </NavLink>
     </nav>
   );
 }
@@ -48,6 +59,7 @@ export default function App() {
         <Route path="/" element={<MusicPage />} />
         <Route path="/interact" element={<InteractionPage />} />
         <Route path="/play" element={<PlayPage />} />
+        <Route path="/lab" element={<VisionLab />} />
       </Routes>
     </BrowserRouter>
   );
