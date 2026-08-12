@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useVision } from "../../../hooks/useVision";
+import { useNavigate } from "react-router-dom";
+import { useCameraInput } from "../../../hooks/useCameraInput";
 import { usePointerController } from "../../../hooks/usePointerController";
 import { TrajectoryTracker } from "../../../motion/trajectory/TrajectoryTracker";
 import { traceScore, resample } from "../../../motion/trajectory/scoring";
 import { Character } from "../../../character/Character";
+import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 import { WRITING_SETS, strokeById } from "../../../content/prompts";
 
 type Phase = "select" | "playing" | "complete";
@@ -16,7 +18,7 @@ export default function AirWritingGame() {
   const [lastScore, setLastScore] = useState<number | null>(null);
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "encouraging" | "waiting">("happy");
   const [bubble, setBubble] = useState<string | null>("Pick a set!");
-  const [mock, setMock] = useState(true);
+  const navigate = useNavigate();
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -32,7 +34,7 @@ export default function AirWritingGame() {
   const trailRef = useRef<{ x: number; y: number }[]>([]);
   const onStrokeDoneRef = useRef<(t: { x: number; y: number }[]) => void>(() => {});
 
-  const vision = useVision({ requirements: { hands: true }, mock });
+  const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { hands: true } });
   const { pointer } = usePointerController(vision, stageRef, phase === "playing");
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -145,9 +147,14 @@ export default function AirWritingGame() {
 
   return (
     <div ref={stageRef} className="h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] relative">
-      <button onClick={() => setPhase("select")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
+      <button onClick={() => navigate("/create")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
         ← Back
       </button>
+
+      {/* camera gate — real camera is the default */}
+      {!mock && vision.status !== "ready" && (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      )}
 
       <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1">
         <Character state={mayaState} message={bubble} size={110} />
@@ -164,10 +171,6 @@ export default function AirWritingGame() {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-xs text-[#8a7f9e] mt-2">
-            <input type="checkbox" checked={mock} onChange={(e) => setMock(e.target.checked)} className="accent-[#6d5cff]" />
-            Mock (no camera)
-          </label>
         </div>
       )}
 

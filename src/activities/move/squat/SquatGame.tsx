@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useVision } from "../../../hooks/useVision";
+import { useNavigate } from "react-router-dom";
+import { useCameraInput } from "../../../hooks/useCameraInput";
 import { Character } from "../../../character/Character";
 import { Confetti } from "../../../components/feedback/Confetti";
+import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 import { SQUAT_TARGETS } from "../../../content/move";
 import { voice } from "../../../engine/voice/VoiceService";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
@@ -9,6 +11,7 @@ import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider
 type Phase = "select" | "countdown" | "playing" | "complete";
 
 export default function SquatGame() {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("select");
   const [target, setTarget] = useState(8);
   const [reps, setReps] = useState(0);
@@ -16,20 +19,13 @@ export default function SquatGame() {
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "waiting" | "encouraging">("happy");
   const [bubble, setBubble] = useState<string | null>("Let's do squats!");
   const [burst, setBurst] = useState(0);
-  const [mock, setMock] = useState(true);
 
   const phaseRef = useRef<Phase>("select");
   const targetRef = useRef(target);
   const repsRef = useRef(0);
   const done = useRef(false);
 
-  const vision = useVision({ requirements: { pose: true }, mock });
-
-  // auto-start vision
-  useEffect(() => {
-    if (vision.status === "idle") void vision.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { pose: true } });
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { targetRef.current = target; }, [target]);
@@ -100,9 +96,14 @@ export default function SquatGame() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-6 px-4">
-      <button onClick={() => setPhase("select")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
+      <button onClick={() => navigate("/move")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
         ← Back
       </button>
+
+      {/* camera gate — real camera is the default */}
+      {!mock && vision.status !== "ready" && (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      )}
 
       <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
@@ -118,10 +119,6 @@ export default function SquatGame() {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-xs text-[#8a7f9e] mt-2">
-            <input type="checkbox" checked={mock} onChange={(e) => setMock(e.target.checked)} className="accent-[#6d5cff]" />
-            Mock (no camera)
-          </label>
         </div>
       )}
 

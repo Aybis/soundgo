@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useVision } from "../../../hooks/useVision";
+import { useNavigate } from "react-router-dom";
+import { useCameraInput } from "../../../hooks/useCameraInput";
 import { usePointerController } from "../../../hooks/usePointerController";
 import { GameSession } from "../../../engine/session/GameSession";
 import { Character } from "../../../character/Character";
 import { InteractiveTarget } from "../../../components/game/InteractiveTarget";
 import { GestureCursor } from "../../../components/game/GestureCursor";
 import { Confetti } from "../../../components/feedback/Confetti";
+import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 import { grabSubject } from "../../../content/grab-answer";
 import type { GrabQuestion } from "../../../content/grab-answer";
 
@@ -14,6 +16,7 @@ type Phase = "select" | "playing" | "complete";
 interface TargetPos { x: number; y: number; }
 
 export default function GrabAnswerGame() {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("select");
   const [subjectId, setSubjectId] = useState("math");
   const [question, setQuestion] = useState<GrabQuestion | null>(null);
@@ -23,7 +26,6 @@ export default function GrabAnswerGame() {
   const [bubble, setBubble] = useState<string | null>("Choose a game!");
   const [burst, setBurst] = useState(0);
   const [locked, setLocked] = useState(false);
-  const [mock, setMock] = useState(true);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<GameSession | null>(null);
@@ -34,10 +36,7 @@ export default function GrabAnswerGame() {
   const positionsRef = useRef<TargetPos[]>([]);
   const lastSelect = useRef(0);
 
-  const vision = useVision({
-    requirements: { hands: true },
-    mock,
-  });
+  const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { hands: true } });
   const { pointer, selectTick } = usePointerController(vision, stageRef, phase === "playing");
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -132,11 +131,16 @@ export default function GrabAnswerGame() {
       className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff]"
     >
       <button
-        onClick={() => setPhase("select")}
+        onClick={() => navigate("/learn")}
         className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white"
       >
         ← Back
       </button>
+
+      {/* camera gate — real camera is the default */}
+      {!mock && vision.status !== "ready" && (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      )}
 
       <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1">
         <Character state={mayaState} message={bubble} size={110} />
@@ -145,28 +149,22 @@ export default function GrabAnswerGame() {
       {phase === "select" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <div className="text-2xl font-bold text-[#3a3352] mb-2">Grab the Answer!</div>
-          {grabSubject(subjectId).id && (
-            <div className="grid grid-cols-2 gap-3 w-80">
-              {["math", "colors", "animals", "shapes", "vocab"].map((id) => {
-                const s = grabSubject(id);
-                return (
-                  <button
-                    key={id}
-                    onClick={() => startSubject(id)}
-                    className="px-4 py-4 rounded-2xl bg-white/85 border border-[#eadff5] hover:border-[#6d5cff] hover:bg-white transition-colors text-center"
-                  >
-                    <div className="text-3xl">{s.emoji}</div>
-                    <div className="font-bold text-[#3a3352] mt-1">{s.title}</div>
-                    <div className="text-xs text-[#8a7f9e]">{s.count} questions</div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <label className="flex items-center gap-2 text-xs text-[#8a7f9e] mt-2">
-            <input type="checkbox" checked={mock} onChange={(e) => setMock(e.target.checked)} className="accent-[#6d5cff]" />
-            Mock (no camera)
-          </label>
+          <div className="grid grid-cols-2 gap-3 w-80">
+            {["math", "colors", "animals", "shapes", "vocab"].map((id) => {
+              const s = grabSubject(id);
+              return (
+                <button
+                  key={id}
+                  onClick={() => startSubject(id)}
+                  className="px-4 py-4 rounded-2xl bg-white/85 border border-[#eadff5] hover:border-[#6d5cff] hover:bg-white transition-colors text-center"
+                >
+                  <div className="text-3xl">{s.emoji}</div>
+                  <div className="font-bold text-[#3a3352] mt-1">{s.title}</div>
+                  <div className="text-xs text-[#8a7f9e]">{s.count} questions</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -206,14 +204,6 @@ export default function GrabAnswerGame() {
             <div className="absolute bottom-3 left-3 z-10 w-40 h-28 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center text-zinc-400 text-xs">
               🖐️ mock mode · click targets
             </div>
-          )}
-          {vision.status === "idle" && !mock && (
-            <button
-              onClick={() => void vision.start()}
-              className="absolute bottom-3 left-3 z-20 w-40 h-28 rounded-xl bg-black/70 text-white text-sm"
-            >
-              Start camera
-            </button>
           )}
         </>
       )}

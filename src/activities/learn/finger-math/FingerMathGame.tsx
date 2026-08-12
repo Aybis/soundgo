@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useVision } from "../../../hooks/useVision";
+import { useNavigate } from "react-router-dom";
+import { useCameraInput } from "../../../hooks/useCameraInput";
 import type { MockScenario } from "../../../vision/providers/MockVisionProvider";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
 import { GameSession } from "../../../engine/session/GameSession";
@@ -8,10 +9,12 @@ import { fingerLevel } from "../../../content/finger-math";
 import type { FingerPrompt } from "../../../content/finger-math";
 import { TemporalSmoothing } from "../../../vision/stabilization/stabilization";
 import { Confetti } from "../../../components/feedback/Confetti";
+import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 
 type Phase = "select" | "playing" | "complete";
 
 export default function FingerMathGame() {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("select");
   const [level, setLevel] = useState(1);
   const [qIndex, setQIndex] = useState(0);
@@ -20,9 +23,26 @@ export default function FingerMathGame() {
   const [bubble, setBubble] = useState<string | null>("Choose a level!");
   const [score, setScore] = useState(0);
   const [accepted, setAccepted] = useState<number | null>(null);
-  const [mock, setMock] = useState(true);
   const [mockCount, setMockCount] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
+  const [mockScenario, setMockScenario] = useState<MockScenario>({});
+
+  const { vision, mock, startCamera, startMock } = useCameraInput({
+    requirements: { hands: true },
+    mockScenario,
+    onFrame: (f) => {
+      if (phaseRef.current !== "playing" || !promptRef.current) return;
+      const hand = f.hands[0];
+      if (!hand) return;
+      sm.current.push(hand.fingerCount);
+      const mode = sm.current.read();
+      if (mode === null) return;
+      const now = f.timestamp;
+      if (now - lastAnswerAt.current > 600) {
+        handleAnswer(mode, now);
+      }
+    },
+  });
 
   const sessionRef = useRef<GameSession | null>(null);
   const promptRef = useRef<FingerPrompt | null>(null);
@@ -31,28 +51,10 @@ export default function FingerMathGame() {
   const phaseRef = useRef<Phase>("select");
   const sm = useRef(new TemporalSmoothing<number>(5));
   const lastAnswerAt = useRef(0);
-  const mockScenarioRef = useRef<MockScenario>({});
-  const [mockScenarioState, setMockScenarioState] = useState<MockScenario>({});
 
-  const vision = useVision({
-    requirements: { hands: true },
-    mock,
-    mockScenario: mockScenarioState,
-    onFrame: (f) => {
-      if (phaseRef.current !== "playing" || !promptRef.current) return;
-      const hand = f.hands[0];
-      if (!hand) return;
-      // stabilize the finger count (temporal mode) before accepting
-      sm.current.push(hand.fingerCount);
-      const mode = sm.current.read();
-      if (mode === null) return;
-      const now = f.timestamp;
-      // must hold the same count for 600ms before accepting
-      if (mode === sm.current.read() && now - lastAnswerAt.current > 600) {
-        handleAnswer(mode, now);
-      }
-    },
-  });
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
+  useEffect(() => { levelRef.current = level; }, [level]);
 
   function handleAnswer(count: number, now: number) {
     const s = sessionRef.current;
@@ -74,11 +76,16 @@ export default function FingerMathGame() {
     }
   }
 
+  function resetAnswerState() {
+    sm.current.clear();
+    lastAnswerAt.current = 0;
+    setAccepted(null);
+  }
+
   function nextQuestion(s: GameSession) {
     const lvl = fingerLevel(levelRef.current);
     const next = qIndexRef.current + 1;
     if (next >= lvl.count) {
-      // level complete
       s.celebrate(`Level ${lvl.id} complete!`);
       setMayaState("celebrating");
       setBubble("You did it! 🎉");
@@ -87,12 +94,12 @@ export default function FingerMathGame() {
       setScore(s.score);
       return;
     }
+    resetAnswerState();
     qIndexRef.current = next;
     setQIndex(next);
     const p = lvl.generate()[next];
     promptRef.current = p;
     setPrompt(p);
-    setAccepted(null);
     setMayaState("waiting");
     setBubble(p.text);
     s.feedback.info(p.text, { voice: true, character: "waiting" });
@@ -106,35 +113,29 @@ export default function FingerMathGame() {
     qIndexRef.current = 0;
     setQIndex(0);
     setScore(0);
+    resetAnswerState();
     setPhase("playing");
     phaseRef.current = "playing";
     const p = fingerLevel(lvl).generate()[0];
     promptRef.current = p;
     setPrompt(p);
-    setAccepted(null);
     setMayaState("waiting");
     setBubble(p.text);
     s.feedback.info(p.text, { voice: true, character: "waiting" });
   }
 
-  // mock finger buttons: set scenario + count
   const showMock = (n: number) => {
     setMockCount(n);
     const sc: MockScenario = { hands: [{ fingers: n }] };
-    mockScenarioRef.current = sc;
-    setMockScenarioState(sc);
+    setMockScenario(sc);
     if (vision.provider instanceof MockVisionProvider) vision.provider.setScenario(sc);
   };
 
-  // wire vision events → MAYA (e.g. on ready)
   useEffect(() => {
-    if (vision.status === "ready" && phase === "playing") {
-      setMayaState("watching");
-    }
+    if (vision.status === "ready" && phase === "playing") setMayaState("watching");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vision.status]);
 
-  // On "select" screen, show MAYA happy
   useEffect(() => {
     if (phase === "select") {
       setMayaState("happy");
@@ -142,23 +143,27 @@ export default function FingerMathGame() {
     }
   }, [phase]);
 
-  // keep refs in sync
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
-  useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
-  useEffect(() => { levelRef.current = level; }, [level]);
-
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
-      {/* nav-ish back */}
+    <div className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
       <button
-        onClick={() => setPhase("select")}
+        onClick={() => navigate("/learn")}
         className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white"
       >
         ← Back
       </button>
 
-      <Character state={mayaState} message={bubble} size={130} />
+      {/* camera gate — real camera is the default */}
+      {mock ? (
+        phase === "playing" && (
+          <div className="absolute bottom-20 right-4 z-20 text-xs text-[#8a7f9e] bg-white/70 border border-[#eadff5] px-3 py-1.5 rounded-full">
+            🖐️ mock · {mockCount ?? "—"} fingers
+          </div>
+        )
+      ) : vision.status !== "ready" ? (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      ) : null}
 
+      <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
 
       {phase === "select" && (
@@ -173,10 +178,6 @@ export default function FingerMathGame() {
               <span className="text-xs text-[#8a7f9e] ml-2">{fingerLevel(lvl).label} · {fingerLevel(lvl).count} questions</span>
             </button>
           ))}
-          <label className="flex items-center gap-2 text-xs text-[#8a7f9e] mt-1">
-            <input type="checkbox" checked={mock} onChange={(e) => setMock(e.target.checked)} className="accent-[#6d5cff]" />
-            Mock (no camera)
-          </label>
         </div>
       )}
 
@@ -189,17 +190,15 @@ export default function FingerMathGame() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-2xl">
-            {accepted !== null && (
-              <div className="px-4 py-2 rounded-2xl bg-emerald-100 text-emerald-700 font-bold">
-                {accepted} ✓
-              </div>
-            )}
-          </div>
+          {accepted !== null && (
+            <div className="px-4 py-2 rounded-2xl bg-emerald-100 text-emerald-700 font-bold text-2xl">
+              {accepted} ✓
+            </div>
+          )}
 
-          {/* camera preview (mock shows a placeholder) */}
-          <div className="relative w-64 h-40 rounded-2xl overflow-hidden bg-black/80 border border-white/10">
-            {!mock && (
+          {/* camera preview */}
+          {!mock && (
+            <div className="relative w-64 h-40 rounded-2xl overflow-hidden bg-black/80 border border-white/10">
               <div
                 ref={(el) => {
                   if (el && vision.videoElement && !el.contains(vision.videoElement)) el.appendChild(vision.videoElement);
@@ -208,23 +207,10 @@ export default function FingerMathGame() {
               >
                 <style>{`video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}`}</style>
               </div>
-            )}
-            {mock && (
-              <div className="absolute inset-0 flex items-center justify-center text-zinc-400 text-sm">
-                🖐️ mock · {mockCount ?? "—"} fingers
-              </div>
-            )}
-            {vision.status === "idle" && (
-              <button
-                onClick={() => void vision.start()}
-                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm"
-              >
-                Start camera
-              </button>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* mock finger buttons (dev only) */}
+          {/* mock finger buttons (testing only) */}
           {mock && (
             <div className="flex flex-wrap justify-center gap-2 max-w-sm">
               {[0, 1, 2, 3, 4, 5].map((n) => (

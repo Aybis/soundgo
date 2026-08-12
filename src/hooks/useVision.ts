@@ -43,8 +43,16 @@ export function useVision(opts: UseVisionOptions) {
   if (!camRef.current) camRef.current = new CameraManager();
   if (!busRef.current) busRef.current = new MotionBus();
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (mockOverride?: boolean) => {
     const o = optsRef.current;
+    const useMock = mockOverride ?? o.mock;
+    // stop any previous session so we never run two engines at once
+    engineRef.current?.stop();
+    engineRef.current = null;
+    if (providerRef.current) {
+      await providerRef.current.destroy().catch(() => {});
+      providerRef.current = null;
+    }
     setStatus("loading");
     setError("");
     const cam = camRef.current!;
@@ -52,12 +60,12 @@ export function useVision(opts: UseVisionOptions) {
     bus.clear();
 
     try {
-      if (!o.mock) {
+      if (!useMock) {
         await cam.start();
       }
-      const provider: VisionProvider = o.mock ? new MockVisionProvider() : new MediaPipeVisionProvider();
+      const provider: VisionProvider = useMock ? new MockVisionProvider() : new MediaPipeVisionProvider();
       providerRef.current = provider;
-      if (o.mock && o.mockScenario) (provider as MockVisionProvider).setScenario(o.mockScenario);
+      if (useMock && o.mockScenario) (provider as MockVisionProvider).setScenario(o.mockScenario);
       await provider.initialize(o.requirements);
 
       const handInt = new HandInterpreter(bus);
@@ -65,7 +73,7 @@ export function useVision(opts: UseVisionOptions) {
 
       const engine = new VisionEngine(provider, cam.video, {
         targetFps: o.targetFps ?? 30,
-        requiresVideo: !o.mock,
+        requiresVideo: !useMock,
         onFrame: (frame) => {
           latestFrameRef.current = frame;
           handInt.process(frame, frame.timestamp);

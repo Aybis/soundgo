@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useVision } from "../../../hooks/useVision";
+import { useNavigate } from "react-router-dom";
+import { useCameraInput } from "../../../hooks/useCameraInput";
 import { usePoseController } from "../../../hooks/usePoseController";
 import { GameSession } from "../../../engine/session/GameSession";
 import { Character } from "../../../character/Character";
 import { Confetti } from "../../../components/feedback/Confetti";
+import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 import { POSES } from "../../../content/move";
 import type { PoseDef } from "../../../content/move";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
@@ -11,6 +13,7 @@ import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider
 type Phase = "select" | "playing" | "complete";
 
 export default function CopyPoseGame() {
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("select");
   const [pose, setPose] = useState<PoseDef | null>(null);
   const [round, setRound] = useState(1);
@@ -18,7 +21,6 @@ export default function CopyPoseGame() {
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "encouraging" | "waiting">("happy");
   const [bubble, setBubble] = useState<string | null>("Copy my moves!");
   const [burst, setBurst] = useState(0);
-  const [mock, setMock] = useState(true);
   const [mockPose, setMockPose] = useState<string | null>(null);
 
   const sessionRef = useRef<GameSession | null>(null);
@@ -28,14 +30,8 @@ export default function CopyPoseGame() {
   const holdSince = useRef<number | null>(null);
   const done = useRef(false);
 
-  const vision = useVision({ requirements: { pose: true }, mock });
+  const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { pose: true } });
   const poseCtrl = usePoseController(vision, phase === "playing");
-
-  // auto-start vision (safe in mock mode; requests camera in real mode)
-  useEffect(() => {
-    if (vision.status === "idle") void vision.start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { poseRef.current = pose; }, [pose]);
@@ -117,10 +113,15 @@ export default function CopyPoseGame() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
-      <button onClick={() => setPhase("select")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
+    <div className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
+      <button onClick={() => navigate("/move")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
         ← Back
       </button>
+
+      {/* camera gate — real camera is the default */}
+      {!mock && vision.status !== "ready" && (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      )}
 
       <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
@@ -132,10 +133,6 @@ export default function CopyPoseGame() {
           <button onClick={startGame} className="px-8 py-3 rounded-full bg-[#6d5cff] text-white font-medium hover:bg-[#5a4ce6]">
             Start
           </button>
-          <label className="flex items-center gap-2 text-xs text-[#8a7f9e] mt-2">
-            <input type="checkbox" checked={mock} onChange={(e) => setMock(e.target.checked)} className="accent-[#6d5cff]" />
-            Mock (no camera)
-          </label>
         </div>
       )}
 
