@@ -128,7 +128,7 @@ export default function CopyPoseGame() {
 
       {phase === "select" && (
         <div className="flex flex-col items-center gap-4">
-          <div className="text-2xl font-bold text-[#3a3352]">Copy the Pose!</div>
+          <div className="text-2xl font-bold text-[#3a3352]">Copy Me!</div>
           <div className="text-sm text-[#8a7f9e]">5 poses · MAYA shows, you copy!</div>
           <button onClick={startGame} className="px-8 py-3 rounded-full bg-[#6d5cff] text-white font-medium hover:bg-[#5a4ce6]">
             Start

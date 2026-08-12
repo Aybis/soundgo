@@ -118,3 +118,20 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
 export function grabSubject(id: string): GrabSubject {
   return GRAB_SUBJECTS.find((s) => s.id === id) ?? GRAB_SUBJECTS[0];
 }
+
+/**
+ * A mixed session: 8 questions sampled across numbers/colors/shapes/animals
+ * (one per subject category, shuffled). Used for the "adventure" mode so the
+ * child gets variety instead of a single-subject grind.
+ */
+export function generateMixedSession(count = 8): GrabQuestion[] {
+  const subjects = ["math", "colors", "shapes", "animals"];
+  const pool: GrabQuestion[] = [];
+  for (const id of subjects) {
+    const qs = grabSubject(id).generate();
+    // take a random question from each subject, keep the pool varied
+    for (const q of qs) pool.push(q);
+  }
+  const shuffled = shuffle(pool);
+  return shuffled.slice(0, count);
+}

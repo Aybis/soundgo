@@ -7,6 +7,7 @@ import { CameraStartOverlay } from "../../../components/camera/CameraStartOverla
 import { SQUAT_TARGETS } from "../../../content/move";
 import { voice } from "../../../engine/voice/VoiceService";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
+import { markCompleted } from "../../../state/settings";
 
 type Phase = "select" | "countdown" | "playing" | "complete";
 
@@ -45,6 +46,7 @@ export default function SquatGame() {
         setMayaState("celebrating");
         setBubble("Amazing! 🎉");
         setBurst((b) => b + 1);
+        markCompleted("Squat Challenge");
         setTimeout(() => setPhase("complete"), 1200);
       }
     });
@@ -143,12 +145,14 @@ export default function SquatGame() {
       )}
 
       {phase === "complete" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-5xl">🏆</div>
-          <div className="text-2xl font-bold text-[#3a3352]">{target} squats done!</div>
-          <button onClick={() => setPhase("select")} className="px-6 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-medium hover:bg-[#5a4ce6]">
-            Done
-          </button>
+        <div className="flex flex-col items-center gap-4 anim-pop">
+          <div className="text-6xl">🏆</div>
+          <Character state="celebrating" message="AMAZING!" size={140} />
+          <div className="text-2xl font-black text-[#3a3352]">{target} squats done!</div>
+          <div className="flex gap-3">
+            <button onClick={() => start(target)} className="px-6 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-bold hover:bg-[#5a4ce6]">PLAY AGAIN</button>
+            <button onClick={() => navigate("/move")} className="px-6 py-2 rounded-full bg-white text-[#3a3352] text-sm font-bold border border-[#eadff5]">CHOOSE ANOTHER GAME</button>
+          </div>
         </div>
       )}
     </div>

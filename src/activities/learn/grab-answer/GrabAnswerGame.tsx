@@ -8,7 +8,11 @@ import { InteractiveTarget } from "../../../components/game/InteractiveTarget";
 import { GestureCursor } from "../../../components/game/GestureCursor";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
-import { grabSubject } from "../../../content/grab-answer";
+import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
+import { GameProgress } from "../../../components/ui/GameProgress";
+import { KidsButton } from "../../../components/ui/KidsButton";
+import { markCompleted } from "../../../state/settings";
+import { grabSubject, generateMixedSession } from "../../../content/grab-answer";
 import type { GrabQuestion } from "../../../content/grab-answer";
 
 type Phase = "select" | "playing" | "complete";
@@ -18,10 +22,10 @@ interface TargetPos { x: number; y: number; }
 export default function GrabAnswerGame() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("select");
-  const [subjectId, setSubjectId] = useState("math");
   const [question, setQuestion] = useState<GrabQuestion | null>(null);
   const [qIndex, setQIndex] = useState(0);
-  const [score, setScore] = useState(0);
+  const [correct, setCorrect] = useState(0);
+  const [total, setTotal] = useState(5);
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "encouraging" | "waiting">("happy");
   const [bubble, setBubble] = useState<string | null>("Choose a game!");
   const [burst, setBurst] = useState(0);
@@ -32,7 +36,7 @@ export default function GrabAnswerGame() {
   const phaseRef = useRef<Phase>("select");
   const questionRef = useRef<GrabQuestion | null>(null);
   const qIndexRef = useRef(0);
-  const subjectIdRef = useRef("math");
+  const totalRef = useRef(5);
   const positionsRef = useRef<TargetPos[]>([]);
   const lastSelect = useRef(0);
 
@@ -41,7 +45,6 @@ export default function GrabAnswerGame() {
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
-  useEffect(() => { subjectIdRef.current = subjectId; }, [subjectId]);
 
   // respond to selection ticks (hand pinch or mouse click)
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function GrabAnswerGame() {
     setLocked(true);
     if (idx === q.answerIndex) {
       s.correctNow("Great!");
-      setScore(s.score);
+      setCorrect(s.correct);
       setMayaState("celebrating");
       setBubble(q.options[idx].label + "! Yes!");
       setBurst((b) => b + 1);
@@ -78,18 +81,19 @@ export default function GrabAnswerGame() {
   }
 
   function nextQuestion(s: GameSession) {
-    const subj = grabSubject(subjectIdRef.current);
     const next = qIndexRef.current + 1;
-    if (next >= subj.count) {
+    if (next >= totalRef.current) {
       s.celebrate(`Level complete!`);
+      setCorrect(s.correct);
       setMayaState("celebrating");
       setBubble("You did it! 🎉");
-      setScore(s.score);
       setPhase("complete");
       phaseRef.current = "complete";
+      markCompleted("Grab the Answer");
       return;
     }
-    loadQuestion(s, subj.generate()[next], next);
+    const qs = generateMixedSession(totalRef.current);
+    loadQuestion(s, qs[next], next);
   }
 
   function loadQuestion(s: GameSession, q: GrabQuestion, idx: number) {
@@ -100,29 +104,36 @@ export default function GrabAnswerGame() {
     setLocked(false);
     setMayaState("waiting");
     setBubble(q.prompt);
-    // place targets in a triangle around the stage center
+    // place targets along the lower-mid stage
     const w = window.innerWidth, h = window.innerHeight;
-    const cy = h * 0.52;
+    const cy = h * 0.56;
     positionsRef.current = q.options.map((_, i) => ({
-      x: w * (0.5 + (i - (q.options.length - 1) / 2) * 0.22),
+      x: w * (0.5 + (i - (q.options.length - 1) / 2) * 0.24),
       y: cy,
     }));
     s.feedback.info(q.prompt, { voice: true, character: "waiting" });
   }
 
-  function startSubject(id: string) {
-    const subj = grabSubject(id);
-    const s = new GameSession({ total: subj.count });
+  function begin(questions: GrabQuestion[], n: number) {
+    const s = new GameSession({ total: n });
     sessionRef.current = s;
-    subjectIdRef.current = id;
-    setSubjectId(id);
+    totalRef.current = n;
+    setTotal(n);
     qIndexRef.current = 0;
     setQIndex(0);
-    setScore(0);
+    setCorrect(0);
     setPhase("playing");
     phaseRef.current = "playing";
-    const q = subj.generate()[0];
-    loadQuestion(s, q, 0);
+    loadQuestion(s, questions[0], 0);
+  }
+
+  function startMixed() {
+    begin(generateMixedSession(8), 8);
+  }
+
+  function startSubject(id: string) {
+    const subj = grabSubject(id);
+    begin(subj.generate(), subj.count);
   }
 
   return (
@@ -147,8 +158,16 @@ export default function GrabAnswerGame() {
       </div>
 
       {phase === "select" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="text-2xl font-bold text-[#3a3352] mb-2">Grab the Answer!</div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+          <div className="text-3xl font-black text-[#3a3352]">Grab the Answer!</div>
+          <button
+            onClick={startMixed}
+            className="w-80 px-6 py-5 rounded-[2rem] bg-gradient-to-br from-[#ffb36b] to-[#ff8c42] text-center shadow-lg hover:scale-[1.03] transition-transform"
+          >
+            <div className="text-3xl">🌟</div>
+            <div className="font-extrabold text-white text-xl">Adventure</div>
+            <div className="text-xs text-white/80 font-semibold">Numbers · Colors · Shapes · Animals — 8 questions</div>
+          </button>
           <div className="grid grid-cols-2 gap-3 w-80">
             {["math", "colors", "animals", "shapes", "vocab"].map((id) => {
               const s = grabSubject(id);
@@ -170,11 +189,9 @@ export default function GrabAnswerGame() {
 
       {phase === "playing" && question && (
         <>
-          <div className="absolute top-36 left-1/2 -translate-x-1/2 text-center z-10">
-            <div className="text-3xl font-bold text-[#3a3352]">{question.prompt}</div>
-            <div className="text-sm text-[#8a7f9e] mt-1">
-              Q {qIndex + 1}/{grabSubject(subjectId).count} · ⭐ {score}
-            </div>
+          <div className="absolute top-32 left-1/2 -translate-x-1/2 text-center z-10">
+            <div className="text-3xl font-black text-[#3a3352]">{question.prompt}</div>
+            <div className="mt-1"><GameProgress current={qIndex} total={total} icon="⭐" /></div>
           </div>
 
           {/* targets */}
@@ -192,34 +209,19 @@ export default function GrabAnswerGame() {
           <GestureCursor pointer={pointer} />
           <Confetti trigger={burst} />
 
-          {!mock && (
-            <div
-              ref={(el) => { if (el && vision.videoElement && !el.contains(vision.videoElement)) el.appendChild(vision.videoElement); }}
-              className="absolute bottom-3 left-3 z-10 w-40 h-28 rounded-xl overflow-hidden bg-black/70 border border-white/10"
-            >
-              <style>{`video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}`}</style>
-            </div>
-          )}
-          {mock && (
-            <div className="absolute bottom-3 left-3 z-10 w-40 h-28 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center text-zinc-400 text-xs">
-              🖐️ mock mode · click targets
-            </div>
-          )}
+          <KidsCameraStage vision={vision} className="absolute bottom-4 left-4 z-10 w-44 h-32" />
         </>
       )}
 
       {phase === "complete" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/40 backdrop-blur-sm">
-          <div className="text-5xl">🎉</div>
-          <div className="text-2xl font-bold text-[#3a3352]">Level complete!</div>
-          <div className="text-lg text-[#8a7f9e]">Score: ⭐ {score}</div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/40 backdrop-blur-sm anim-pop">
+          <div className="text-6xl">🎉</div>
+          <Character state="celebrating" message="AMAZING!" size={140} />
+          <GameProgress current={correct} total={total} icon="⭐" />
+          <div className="text-2xl font-black text-[#3a3352]">{correct} / {total}</div>
           <div className="flex gap-3">
-            <button onClick={() => startSubject(subjectId)} className="px-5 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-medium hover:bg-[#5a4ce6]">
-              Replay
-            </button>
-            <button onClick={() => setPhase("select")} className="px-5 py-2 rounded-full bg-white text-[#3a3352] text-sm font-medium border border-[#eadff5]">
-              Games
-            </button>
+            <KidsButton onClick={startMixed}>PLAY AGAIN</KidsButton>
+            <KidsButton variant="secondary" onClick={() => navigate("/learn")}>CHOOSE ANOTHER GAME</KidsButton>
           </div>
         </div>
       )}

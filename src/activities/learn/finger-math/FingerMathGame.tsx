@@ -10,6 +10,10 @@ import type { FingerPrompt } from "../../../content/finger-math";
 import { TemporalSmoothing } from "../../../vision/stabilization/stabilization";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
+import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
+import { GameProgress } from "../../../components/ui/GameProgress";
+import { KidsButton } from "../../../components/ui/KidsButton";
+import { markCompleted } from "../../../state/settings";
 import { ai } from "../../../engine/ai/AIService";
 
 type Phase = "select" | "playing" | "complete";
@@ -22,7 +26,7 @@ export default function FingerMathGame() {
   const [prompt, setPrompt] = useState<FingerPrompt | null>(null);
   const [mayaState, setMayaState] = useState<Parameters<typeof Character>[0]["state"]>("happy");
   const [bubble, setBubble] = useState<string | null>("Choose a level!");
-  const [score, setScore] = useState(0);
+  const [correct, setCorrect] = useState(0);
   const [accepted, setAccepted] = useState<number | null>(null);
   const [mockCount, setMockCount] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
@@ -66,7 +70,7 @@ export default function FingerMathGame() {
     const streak = s.streak;
     if (count === p.answer) {
       s.correctNow("Great!");
-      setScore(s.score);
+      setCorrect(s.correct);
       setMayaState("celebrating");
       // AI encouragement
       void ai().encourage({ game: "finger-math", correct: true, streak: streak + 1, attempts: s.attempts, level: levelRef.current, score: s.score }).then((line) => {
@@ -103,11 +107,12 @@ export default function FingerMathGame() {
     const next = qIndexRef.current + 1;
     if (next >= lvl.count) {
       s.celebrate(`Level ${lvl.id} complete!`);
+      setCorrect(s.correct);
       setMayaState("celebrating");
       setBubble("You did it! 🎉");
       setPhase("complete");
       phaseRef.current = "complete";
-      setScore(s.score);
+      markCompleted("Finger Math");
       return;
     }
     resetAnswerState();
@@ -128,7 +133,7 @@ export default function FingerMathGame() {
     setLevel(lvl);
     qIndexRef.current = 0;
     setQIndex(0);
-    setScore(0);
+    setCorrect(0);
     resetAnswerState();
     setPhase("playing");
     phaseRef.current = "playing";
@@ -203,63 +208,45 @@ export default function FingerMathGame() {
       {phase === "playing" && (
         <>
           <div className="text-center">
-            <div className="text-3xl font-bold text-[#3a3352]">{prompt?.text}</div>
-            <div className="text-sm text-[#8a7f9e] mt-1">
-              Level {level} · Q {qIndex + 1}/{fingerLevel(level).count} · ⭐ {score}
-            </div>
+            <div className="text-4xl font-black text-[#3a3352]">{prompt?.text}</div>
+            <div className="mt-2"><GameProgress current={qIndex} total={fingerLevel(level).count} icon="⭐" /></div>
           </div>
 
           {accepted !== null && (
-            <div className="px-4 py-2 rounded-2xl bg-emerald-100 text-emerald-700 font-bold text-2xl">
+            <div className="anim-pop px-5 py-2 rounded-2xl bg-emerald-100 text-emerald-700 font-black text-3xl">
               {accepted} ✓
             </div>
           )}
 
-          {/* camera preview */}
-          {!mock && (
-            <div className="relative w-64 h-40 rounded-2xl overflow-hidden bg-black/80 border border-white/10">
-              <div
-                ref={(el) => {
-                  if (el && vision.videoElement && !el.contains(vision.videoElement)) el.appendChild(vision.videoElement);
-                }}
-                className="absolute inset-0"
-              >
-                <style>{`video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}`}</style>
+          {/* camera stage — magical, no debug */}
+          <KidsCameraStage vision={vision} hint="Show your fingers! 🖐️" className="w-[min(90vw,420px)] h-52">
+            {mock && (
+              <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-2 px-4">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => showMock(n)}
+                    className={`px-3 py-2 rounded-xl text-sm font-bold ${mockCount === n ? "bg-[#6d5cff] text-white" : "bg-white/80 text-[#3a3352]"}`}
+                  >
+                    {n}
+                  </button>
+                ))}
               </div>
-            </div>
-          )}
-
-          {/* mock finger buttons (testing only) */}
-          {mock && (
-            <div className="flex flex-wrap justify-center gap-2 max-w-sm">
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => showMock(n)}
-                  className={`px-3 py-2 rounded-xl text-sm font-medium ${
-                    mockCount === n ? "bg-[#6d5cff] text-white" : "bg-white/80 text-[#3a3352] border border-[#eadff5]"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
+            )}
+          </KidsCameraStage>
         </>
       )}
 
       {phase === "complete" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-5xl font-bold text-[#6d5cff]">🎉</div>
-          <div className="text-2xl font-bold text-[#3a3352]">Level {level} complete!</div>
-          <div className="text-lg text-[#8a7f9e]">Score: ⭐ {score}</div>
+        <div className="flex flex-col items-center gap-4 anim-pop">
+          <div className="text-6xl">🎉</div>
+          <Character state="celebrating" message="AMAZING!" size={140} />
+          <GameProgress current={correct} total={fingerLevel(level).count} icon="⭐" />
+          <div className="text-2xl font-black text-[#3a3352]">{correct} / {fingerLevel(level).count}</div>
+          <div className="text-sm text-[#8a7f9e]">Great job today!</div>
           <div className="flex gap-3">
-            <button onClick={() => startLevel(level)} className="px-5 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-medium hover:bg-[#5a4ce6]">
-              Replay
-            </button>
-            <button onClick={() => setPhase("select")} className="px-5 py-2 rounded-full bg-white text-[#3a3352] text-sm font-medium border border-[#eadff5]">
-              Levels
-            </button>
+            <KidsButton onClick={() => startLevel(level)}>PLAY AGAIN</KidsButton>
+            <KidsButton variant="secondary" onClick={() => navigate("/learn")}>CHOOSE ANOTHER GAME</KidsButton>
           </div>
         </div>
       )}

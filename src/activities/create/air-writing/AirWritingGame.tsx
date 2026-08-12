@@ -9,22 +9,31 @@ import { CameraStartOverlay } from "../../../components/camera/CameraStartOverla
 import { WRITING_SETS, strokeById } from "../../../content/prompts";
 
 type Phase = "select" | "playing" | "complete";
+type Mode = "trace" | "free";
+
+const COLORS = ["#6d5cff", "#ff6b9d", "#06d6a0", "#ffd166", "#ff8c42", "#3b82f6"];
 
 export default function AirWritingGame() {
   const [phase, setPhase] = useState<Phase>("select");
+  const [mode, setMode] = useState<Mode>("free");
   const [setId, setSetId] = useState("abc");
   const [strokeIdx, setStrokeIdx] = useState(0);
   const [score, setScore] = useState(0);
-  const [lastScore, setLastScore] = useState<number | null>(null);
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "encouraging" | "waiting">("happy");
-  const [bubble, setBubble] = useState<string | null>("Pick a set!");
+  const [bubble, setBubble] = useState<string | null>("Let's draw!");
+  const [color, setColor] = useState(COLORS[0]);
+  const [width, setWidth] = useState(8);
   const navigate = useNavigate();
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const phaseRef = useRef<Phase>("select");
+  const modeRef = useRef<Mode>("free");
   const strokeIdxRef = useRef(0);
   const setIdRef = useRef("abc");
+  const colorRef = useRef(COLORS[0]);
+  const widthRef = useRef(8);
+  const strokesRef = useRef<{ points: { x: number; y: number }[]; color: string; width: number }[]>([]);
   const tracker = useRef(new TrajectoryTracker({
     alpha: 0.5,
     minDistance: 3,
@@ -38,10 +47,13 @@ export default function AirWritingGame() {
   const { pointer } = usePointerController(vision, stageRef, phase === "playing");
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { strokeIdxRef.current = strokeIdx; }, [strokeIdx]);
   useEffect(() => { setIdRef.current = setId; }, [setId]);
+  useEffect(() => { colorRef.current = color; }, [color]);
+  useEffect(() => { widthRef.current = width; }, [width]);
 
-  // canvas draw loop: draw the trail live
+  // canvas draw loop: draw all completed strokes + the live trail
   useEffect(() => {
     if (phase !== "playing") return;
     const canvas = canvasRef.current!;
@@ -54,27 +66,29 @@ export default function AirWritingGame() {
     };
     resize();
     window.addEventListener("resize", resize);
+    const paint = (pts: { x: number; y: number }[], c: string, w: number) => {
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    };
     const loop = () => {
       ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      ctx.strokeStyle = "#6d5cff";
-      ctx.lineWidth = 8;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      const trail = trailRef.current;
-      if (trail.length > 1) {
-        ctx.beginPath();
-        ctx.moveTo(trail[0].x, trail[0].y);
-        for (const p of trail.slice(1)) ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-      }
+      for (const s of strokesRef.current) paint(s.points, s.color, s.width);
+      paint(trailRef.current, colorRef.current, widthRef.current);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
   }, [phase]);
 
-  // feed pointer into tracker; onStrokeEnd handles scoring
+  // feed pointer into tracker; onStrokeEnd handles scoring / persisting
   useEffect(() => {
     onStrokeDoneRef.current = onStrokeDone;
   });
@@ -86,7 +100,22 @@ export default function AirWritingGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pointer]);
 
+  function clearDraw() {
+    strokesRef.current = [];
+  }
+
   function onStrokeDone(trail: { x: number; y: number }[]) {
+    if (modeRef.current === "free") {
+      // persist the drawing so it stays on the canvas
+      if (trail.length > 1) {
+        strokesRef.current.push({ points: trail, color: colorRef.current, width: widthRef.current });
+        setMayaState("celebrating");
+        setBubble("Wow! Look what you made! 🎨");
+        setTimeout(() => { setMayaState("happy"); setBubble("Draw with your finger!"); }, 1500);
+      }
+      trailRef.current = [];
+      return;
+    }
     const setId = setIdRef.current;
     const sIdx = strokeIdxRef.current;
     const stroke = strokeById(WRITING_SETS.find((s) => s.id === setId)!.strokes[sIdx]);
@@ -94,8 +123,7 @@ export default function AirWritingGame() {
     // map trail → normalized in the trace box
     const normTrail = trail.map((p) => ({ x: (p.x - box.x) / box.w, y: (p.y - box.y) / box.h }));
     const template = stroke.points.map(([x, y]) => ({ x, y }));
-    const { score, ok } = traceScore(template, normTrail);
-    setLastScore(score);
+    const { ok } = traceScore(template, normTrail);
     if (ok) {
       setScore((s) => s + 100);
       setMayaState("celebrating");
@@ -162,54 +190,73 @@ export default function AirWritingGame() {
 
       {phase === "select" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <div className="text-2xl font-bold text-[#3a3352]">Air Writing!</div>
-          <div className="text-sm text-[#8a7f9e]">Trace the letter in the air with your finger!</div>
-          <div className="flex gap-3">
-            {WRITING_SETS.map((s) => (
-              <button key={s.id} onClick={() => start(s.id)} className="px-6 py-3 rounded-2xl bg-white/85 border border-[#eadff5] hover:border-[#6d5cff] text-xl font-bold text-[#3a3352]">
-                {s.label}
-              </button>
-            ))}
+          <div className="text-3xl font-black text-[#3a3352]">Air Draw!</div>
+          <div className="text-sm text-[#8a7f9e]">Draw with your finger in the air!</div>
+          <div className="flex flex-col gap-3 w-64">
+            <button onClick={() => { setMode("free"); setPhase("playing"); phaseRef.current = "playing"; setBubble("Draw with your finger!"); }}
+              className="px-6 py-4 rounded-[2rem] bg-gradient-to-br from-[#ffb36b] to-[#ff8c42] text-white font-extrabold text-xl shadow-lg hover:scale-[1.03] transition-transform">
+              🎨 Free Draw
+            </button>
+            <button onClick={() => { setMode("trace"); start("abc"); }}
+              className="px-6 py-3 rounded-2xl bg-white/85 border border-[#eadff5] text-[#3a3352] font-bold hover:border-[#6d5cff]">
+              ✍️ Trace letters
+            </button>
           </div>
         </div>
       )}
 
       {phase === "playing" && (
         <>
-          {/* trace canvas */}
+          {/* draw canvas */}
           <canvas ref={canvasRef} className="absolute inset-0 z-0" />
-          {/* target stroke ghost */}
-          <svg className="absolute z-0 pointer-events-none" style={{ left: window.innerWidth * 0.15, top: window.innerHeight * 0.22, width: window.innerWidth * 0.7, height: window.innerHeight * 0.5 }}>
-            <polyline
-              points={currentStroke.points.map(([x, y]) => `${x * 100},${y * 100}`).join(" ")}
-              fill="none"
-              stroke="rgba(109,92,255,0.25)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
 
-          <div className="absolute top-40 left-1/2 -translate-x-1/2 text-center z-10">
-            <div className="text-5xl font-bold text-[#6d5cff]">{currentStroke.label}</div>
-            <div className="text-sm text-[#8a7f9e] mt-1">
-              Trace it! · ⭐ {score} {lastScore !== null && <span className="ml-2 text-xs">last: {lastScore}%</span>}
+          {/* target stroke ghost (trace mode only) */}
+          {mode === "trace" && (
+            <svg className="absolute z-0 pointer-events-none" style={{ left: window.innerWidth * 0.15, top: window.innerHeight * 0.22, width: window.innerWidth * 0.7, height: window.innerHeight * 0.5 }}>
+              <polyline points={currentStroke.points.map(([x, y]) => `${x * 100},${y * 100}`).join(" ")} fill="none" stroke="rgba(109,92,255,0.25)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+
+          {mode === "trace" && (
+            <div className="absolute top-40 left-1/2 -translate-x-1/2 text-center z-10">
+              <div className="text-5xl font-bold text-[#6d5cff]">{currentStroke.label}</div>
+              <div className="text-sm text-[#8a7f9e] mt-1">Trace it! · ⭐ {score}</div>
             </div>
-          </div>
+          )}
 
-          {/* mock: simulate a traced stroke */}
+          {/* free-draw controls */}
+          {mode === "free" && (
+            <div className="absolute bottom-6 inset-x-0 z-20 flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2 bg-white/80 backdrop-blur rounded-full px-2 py-1.5 shadow">
+                {COLORS.map((c) => (
+                  <button key={c} onClick={() => setColor(c)} className={`h-7 w-7 rounded-full border-2 transition-transform ${color === c ? "scale-125 border-[#3a3352]" : "border-white"}`} style={{ background: c }} aria-label={`color ${c}`} />
+                ))}
+                <button onClick={() => setWidth((w) => (w === 8 ? 16 : 8))} className="px-2 text-xs font-bold text-[#3a3352]">{width === 8 ? "Thin" : "Thick"}</button>
+                <button onClick={clearDraw} className="px-3 py-1 rounded-full bg-red-100 text-red-500 text-xs font-bold">🗑 Clear</button>
+              </div>
+            </div>
+          )}
+
+          {/* mock controls */}
           {mock && (
-            <button
-              onClick={() => {
-                const box = getTraceBox();
-                const template = resample(currentStroke.points.map(([x, y]) => ({ x, y })), 40);
-                trailRef.current = template.map((p) => ({ x: box.x + p.x * box.w, y: box.y + p.y * box.h }));
-                onStrokeDone(trailRef.current);
-              }}
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 px-6 py-3 rounded-full bg-[#6d5cff] text-white font-medium"
-            >
-              ✍️ Trace {currentStroke.label} (mock)
-            </button>
+            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+              {mode === "free" && (
+                <button onClick={() => clearDraw()} className="px-4 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-bold">Clear (mock)</button>
+              )}
+              {mode === "trace" && (
+                <button
+                  onClick={() => {
+                    const box = getTraceBox();
+                    const template = resample(currentStroke.points.map(([x, y]) => ({ x, y })), 40);
+                    trailRef.current = template.map((p) => ({ x: box.x + p.x * box.w, y: box.y + p.y * box.h }));
+                    onStrokeDone(trailRef.current);
+                  }}
+                  className="px-6 py-3 rounded-full bg-[#6d5cff] text-white font-medium"
+                >
+                  ✍️ Trace {currentStroke.label} (mock)
+                </button>
+              )}
+            </div>
           )}
         </>
       )}
