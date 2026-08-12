@@ -12,7 +12,7 @@ interface Expression {
 
 function expressionFor(state: MayaState): Expression {
   switch (state) {
-    case "happy": case "excited": case "celebrating":
+    case "wave": case "happy": case "excited": case "celebrating":
       return { eyes: "happy", mouth: "big", brows: "none", tint: "#ffd9ec" };
     case "surprised":
       return { eyes: "wide", mouth: "o", brows: "raised", tint: "#ffe4c9" };
@@ -75,6 +75,13 @@ export function MayaSVG({ state, size = 160 }: { state: MayaState; size?: number
       {/* antenna */}
       <path d="M 0 -44 Q 4 -56 14 -58" stroke={body} strokeWidth="3" fill="none" strokeLinecap="round" />
       <circle cx="16" cy="-58" r="4" fill={body} />
+      {/* waving arm */}
+      {state === "wave" && (
+        <g className="anim-wiggle" style={{ transformOrigin: "26px 30px" }}>
+          <path d="M 24 30 Q 40 20 46 4" stroke={body} strokeWidth="7" strokeLinecap="round" fill="none" />
+          <circle cx="46" cy="2" r="6" fill={face} />
+        </g>
+      )}
       {/* mood tint glow */}
       <circle cx="0" cy="-6" r="40" fill={e.tint} opacity="0.25" />
     </svg>
@@ -84,6 +91,7 @@ export function MayaSVG({ state, size = 160 }: { state: MayaState; size?: number
 // Map a MayaState to a short voice line MAYA might say (used as fallback captions).
 export const STATE_LINE: Record<MayaState, string> = {
   idle: "",
+  wave: "Hi!",
   listening: "I'm listening!",
   thinking: "Hmm...",
   speaking: "",

@@ -2,6 +2,7 @@
 
 export type MayaState =
   | "idle"
+  | "wave"
   | "listening"
   | "thinking"
   | "speaking"
