@@ -13,6 +13,8 @@ interface Wheel {
   cx: number; cy: number; r: number; count: number;
 }
 
+const ACCENT = "#6d5cff";
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -21,8 +23,7 @@ export default function App() {
   const [controls, setControls] = useState<Controls>(DEFAULT_CONTROLS);
   const controlsRef = useRef<Controls>(DEFAULT_CONTROLS);
   const synthRef = useRef<ChordSynth | null>(null);
-  const [now, setNow] = useState({ root: "C", chord: "maj", active: false });
-  const nowRef = useRef({ root: "C", chord: "maj", active: false });
+  const [badge, setBadge] = useState({ root: "C", chord: "maj" });
 
   const setControlsBoth = useCallback((c: Controls) => {
     setControls(c);
@@ -60,29 +61,53 @@ export default function App() {
       ];
     };
 
+    // Slot i lives at angle (i/count)*2PI - PI/2 (slot 0 at top, clockwise).
+    // Fraction 0.0 = top, 0.25 = right, 0.5 = bottom, 0.75 = left.
     const angleFrac = (dx: number, dy: number) => {
-      const a = Math.atan2(dy, dx) + Math.PI; // 0..2PI, 0 = left
-      return (a / (2 * Math.PI)) % 1;
+      let a = Math.atan2(dy, dx) + Math.PI / 2;
+      a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      return a / (2 * Math.PI);
     };
 
     const drawWheel = (
-      wheel: Wheel, cxInv: number, labels: string[], highlight: number | null,
-      activeSlots: number[], labelFn: (i: number) => string,
+      wheel: Wheel,
+      labels: string[],
+      highlight: number | null,
+      activeSlots: number[],
+      centerLabel: string,
     ) => {
       const { cx, cy, r } = wheel;
+      const count = labels.length;
+      const seg = (Math.PI * 2) / count;
+
+      // highlight wedge (what the hand currently points at)
+      if (highlight !== null) {
+        const a0 = (highlight / count) * Math.PI * 2 - Math.PI / 2 - seg / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, a0, a0 + seg);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(109,92,255,0.22)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, a0, a0 + seg);
+        ctx.strokeStyle = ACCENT;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
       // ring
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(255,255,255,0.14)";
       ctx.lineWidth = 2;
       ctx.stroke();
-      // slots
-      const count = labels.length;
+
       for (let i = 0; i < count; i++) {
         const a = (i / count) * Math.PI * 2 - Math.PI / 2;
-        const x1 = cx + Math.cos(a) * (r - wheel.r * 0.18);
+        const x1 = cx + Math.cos(a) * (r - 0.18 * r);
         const x2 = cx + Math.cos(a) * r;
-        const y1 = cy + Math.sin(a) * (r - wheel.r * 0.18);
+        const y1 = cy + Math.sin(a) * (r - 0.18 * r);
         const y2 = cy + Math.sin(a) * r;
         const isHL = highlight === i;
         const isActive = activeSlots.includes(i);
@@ -90,26 +115,26 @@ export default function App() {
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.strokeStyle = isHL
-          ? "#6d5cff"
+          ? ACCENT
           : isActive
             ? "rgba(255,255,255,0.35)"
             : "rgba(255,255,255,0.12)";
         ctx.lineWidth = isHL ? 3 : 1.5;
         ctx.stroke();
         // label
-        const lr = r - wheel.r * 0.34;
+        const lr = r - 0.34 * r;
         const lx = cx + Math.cos(a) * lr;
         const ly = cy + Math.sin(a) * lr;
         ctx.font = "600 " + Math.round(r * 0.16) + "px ui-sans-serif, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = isHL ? "#6d5cff" : "rgba(255,255,255,0.55)";
-        ctx.fillText(labelFn(i), lx, ly);
+        ctx.fillStyle = isHL ? ACCENT : "rgba(255,255,255,0.55)";
+        ctx.fillText(labels[i], lx, ly);
       }
       // center caption
-      ctx.font = "500 " + Math.round(r * 0.1) + "px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.35)";
-      ctx.fillText(cxInv === 0 ? "ROOT" : "CHORD", cx, cy + r * 0.05);
+      ctx.font = "600 " + Math.round(r * 0.11) + "px ui-sans-serif, system-ui, sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.fillText(centerLabel, cx, cy);
     };
 
     const compute = (w: number, h: number, hands: { x: number; y: number }[]) => {
@@ -128,62 +153,57 @@ export default function App() {
         const dy = hand.y - wheel.cy;
         const dist = Math.hypot(dx, dy);
         if (dist > wheel.r * 1.7) return null; // hand moved away
-        const frac = angleFrac(dx, dy);
-        return { frac, dist };
+        return angleFrac(dx, dy);
       };
 
-      const lw = readWheel(leftHand, left);
-      const rw = readWheel(rightHand, right);
+      const lFrac = readWheel(leftHand, left);
+      const rFrac = readWheel(rightHand, right);
 
       // ---- root note (left wheel) ----
       let rootSemitone: number;
       let rootLabel: string;
-      if (lw) {
+      let rootIndex: number | null = null;
+      if (lFrac !== null) {
         if (c.snap) {
-          const i = Math.round(lw.frac * left.count) % left.count;
+          const i = Math.round(lFrac * left.count) % left.count;
+          rootIndex = i;
           rootSemitone = c.simple ? letterToSemitone(NATURALS[i]) : i;
           rootLabel = c.simple ? NATURALS[i] : CHROMATIC[(i + 12) % 12];
           if (c.scale !== "Chromatic") rootSemitone = snapToScale(rootSemitone, c.scale);
         } else {
-          rootSemitone = lw.frac * 12;
+          rootSemitone = lFrac * 12;
           rootLabel = "~";
         }
       } else {
-        rootSemitone = 3; // default C
+        rootSemitone = 3;
         rootLabel = "C";
       }
 
       // ---- chord (right wheel) ----
       let chordIndex = 0;
-      if (rw) {
-        chordIndex = Math.round(rw.frac * CHORDS.length) % CHORDS.length;
+      if (rFrac !== null) {
+        chordIndex = Math.round(rFrac * CHORDS.length) % CHORDS.length;
       }
       const chord = CHORDS[chordIndex].intervals;
       const chordName = CHORDS[chordIndex].name;
 
-      // ---- melody mode: right hand becomes a monophonic melody line ----
       const mode = c.mode;
-      let freqs: number[] = [];
+      let freqs: number[];
       const baseMidi = rangeBaseMidi(c.range) + rootSemitone;
       if (mode === "two-hand") {
         freqs = chord.map((iv) => midiToFreq(baseMidi + iv));
       } else {
         // melody: pitch follows right hand vertical position
-        let melodyMidi: number;
-        let melodyOn = false;
         if (rightHand) {
-          const frac = 1 - rightHand.y / h; // higher = higher pitch
-          melodyMidi = rangeBaseMidi(c.range) + frac * 12 * 2; // 2 octave sweep
-          melodyOn = true;
+          const frac = 1 - rightHand.y / h;
+          const melodyMidi = rangeBaseMidi(c.range) + frac * 24;
+          freqs = [midiToFreq(melodyMidi), ...chord.map((iv) => midiToFreq(rangeBaseMidi(c.range) - 12 + iv))];
         } else {
-          melodyMidi = baseMidi;
+          freqs = chord.map((iv) => midiToFreq(baseMidi + iv));
         }
-        freqs = [midiToFreq(melodyMidi), ...chord.map((iv) => midiToFreq(rangeBaseMidi(c.range) - 12 + iv))];
-        void melodyOn;
       }
 
-      const active = !!(lw || rw);
-      return { freqs, rootLabel, chordName, active, leftHL: lw ? Math.round(lw.frac * left.count) % left.count : null };
+      return { freqs, rootLabel, chordName, rootIndex, chordIndex };
     };
 
     const frame = () => {
@@ -195,7 +215,6 @@ export default function App() {
       const [left, right] = layout(w, h);
       left.count = controlsRef.current.simple ? NATURALS.length : CHROMATIC.length;
 
-      // clear (transparent so video shows through)
       ctx.clearRect(0, 0, w, h);
 
       // hands
@@ -218,8 +237,7 @@ export default function App() {
       if (key !== lastChordKey) {
         lastChordKey = key;
         synth.play(res.freqs);
-        nowRef.current = { root: res.rootLabel, chord: res.chordName, active: res.active };
-        setNow(nowRef.current);
+        setBadge({ root: res.rootLabel, chord: res.chordName });
       }
 
       // scale-active slots (notes that belong to the scale)
@@ -230,20 +248,19 @@ export default function App() {
         if (inScale(sem, c.scale)) activeSlotsL.push(i);
       }
 
-      // draw wheels
       const leftLabels = c.simple ? NATURALS : CHROMATIC;
-      drawWheel(left, 0, leftLabels, res.leftHL, activeSlotsL, (i) => leftLabels[i]);
       const rightLabels = CHORDS.map((c2) => c2.name);
-      drawWheel(right, 1, rightLabels, null, [], (i) => rightLabels[i]);
+      drawWheel(left, leftLabels, res.rootIndex, activeSlotsL, res.rootLabel);
+      drawWheel(right, rightLabels, res.chordIndex, [], CHORDS[res.chordIndex].name);
 
       // hand cursors
       for (const h of screen) {
         ctx.beginPath();
         ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
-        ctx.fillStyle = "#6d5cff";
+        ctx.fillStyle = ACCENT;
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(h.x, h.y, 11, 0, Math.PI * 2);
+        ctx.arc(h.x, h.y, 12, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(109,92,255,0.5)";
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -276,10 +293,11 @@ export default function App() {
       />
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
-      {/* live status chip */}
       {status === "ready" && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 rounded-full bg-black/50 border border-white/10 text-xs text-zinc-300 backdrop-blur">
-          {now.root} · {now.chord} {now.active ? "●" : "○"}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 rounded-full bg-black/50 border border-white/10 text-sm text-zinc-200 backdrop-blur">
+          <span className="text-[#6d5cff] font-semibold">{badge.root}</span>
+          <span className="text-zinc-400"> · </span>
+          <span className="text-zinc-200 font-semibold">{badge.chord}</span>
         </div>
       )}
 
