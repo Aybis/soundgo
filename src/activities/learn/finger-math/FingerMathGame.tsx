@@ -32,9 +32,10 @@ export default function FingerMathGame() {
     mockScenario,
     onFrame: (f) => {
       if (phaseRef.current !== "playing" || !promptRef.current) return;
-      const hand = f.hands[0];
-      if (!hand) return;
-      sm.current.push(hand.fingerCount);
+      if (!f.hands.length) return;
+      // count across ALL visible hands (kids use two hands for 6–10)
+      const total = f.hands.reduce((s, h) => s + (h.fingerCount ?? 0), 0);
+      sm.current.push(total);
       const mode = sm.current.read();
       if (mode === null) return;
       const now = f.timestamp;
@@ -126,7 +127,10 @@ export default function FingerMathGame() {
 
   const showMock = (n: number) => {
     setMockCount(n);
-    const sc: MockScenario = { hands: [{ fingers: n }] };
+    // split across two hands when the answer needs more than one hand (>5)
+    const hands =
+      n <= 5 ? [{ fingers: n }] : [{ fingers: 5 }, { fingers: n - 5 }];
+    const sc: MockScenario = { hands };
     setMockScenario(sc);
     if (vision.provider instanceof MockVisionProvider) vision.provider.setScenario(sc);
   };
@@ -213,11 +217,11 @@ export default function FingerMathGame() {
           {/* mock finger buttons (testing only) */}
           {mock && (
             <div className="flex flex-wrap justify-center gap-2 max-w-sm">
-              {[0, 1, 2, 3, 4, 5].map((n) => (
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <button
                   key={n}
                   onClick={() => showMock(n)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium ${
+                  className={`px-3 py-2 rounded-xl text-sm font-medium ${
                     mockCount === n ? "bg-[#6d5cff] text-white" : "bg-white/80 text-[#3a3352] border border-[#eadff5]"
                   }`}
                 >
