@@ -23,7 +23,7 @@ const WRONG_LINES = [
 
 const STREAK_LINES = (n: number) => [
   `${n} in a row! You're on fire! 🔥`,
-  `${n} correct — you're a superstar! ⭐`,
+  `${n}-answer streak — you're a superstar! ⭐`,
   `Wow, streak of ${n}! 🎉`,
 ];
 

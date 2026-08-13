@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { voice } from "../engine/voice/VoiceService";
+import { audio } from "../engine/audio/AudioEngine";
 
 export interface Settings {
   nickname: string;
@@ -50,8 +51,13 @@ export function useSettings() {
 
   useEffect(() => {
     saveSettings(settings);
-    // side effects: apply voice mute + audio volumes
+    // side effects: apply voice mute + audio volumes to the shared engine.
+    // `ensure()` is intentionally not called: no AudioContext is created until
+    // the child takes a sound-producing action (browser autoplay policy).
     voice().setMuted(!settings.voiceOn);
+    const engine = audio();
+    engine.setVolume("music", settings.musicVolume);
+    engine.setVolume("effects", settings.effectsVolume);
   }, [settings]);
 
   const update = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }));
