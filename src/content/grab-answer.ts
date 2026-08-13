@@ -7,6 +7,9 @@ export interface GrabOption {
   label: string;
   kind: OptionKind;
   value?: string; // for "color" kind, a CSS color
+  animalId?: string;
+  imageAlt?: string;
+  emoji?: string;
 }
 
 export interface GrabQuestion {
@@ -24,6 +27,14 @@ export interface GrabSubject {
 }
 
 const rand = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1));
+
+const ANIMAL_VISUALS: Record<string, string> = {
+  Cat: "cat",
+  Dog: "dog",
+  Cow: "cow",
+  Duck: "duck",
+  Lion: "lion",
+};
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = <T,>(arr: T[]): T[] => {
   const a = [...arr];
@@ -78,8 +89,21 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       return Array.from({ length: 5 }, () => {
         const target = pick(ANIMALS);
         const others = shuffle(ANIMALS.filter((a) => a[0] !== target[0])).slice(0, 2);
-        const options = shuffle([target, ...others].map(([label, emoji]) => ({ label: `${emoji} ${label}`, kind: "emoji" as const })));
-        return { prompt: `Which animal says ${target[2]}?`, options, answerIndex: options.findIndex((o) => o.label.includes(target[0])) };
+        const options = shuffle([target, ...others].map(([label, emoji]) => ({
+          label,
+          kind: "emoji" as const,
+          emoji,
+          animalId: ANIMAL_VISUALS[label],
+          imageAlt: `${label} animal`,
+        })));
+        const promptByAnimal: Record<string, string> = {
+          Cat: "Which animal has soft fur, whiskers, and likes to meow?",
+          Dog: "Which animal barks, loves people, and likes to play?",
+          Cow: "Which animal is black and white, lives on a farm, and says moo?",
+          Duck: "Which animal has a beak, likes to swim, and says quack?",
+          Lion: "Which animal has a big mane and is called the king of the jungle?",
+        };
+        return { prompt: promptByAnimal[target[0]], options, answerIndex: options.findIndex((o) => o.animalId === ANIMAL_VISUALS[target[0]]) };
       });
     },
   },

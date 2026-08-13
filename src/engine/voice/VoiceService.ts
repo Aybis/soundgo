@@ -1,10 +1,13 @@
 // Voice/TTS service. Provider-independent so game code never calls vendor APIs.
 // MVP uses browser SpeechSynthesis; future adapters (ElevenLabs, OpenAI, ...) plug in.
 
+export type VoiceLanguage = "id" | "en";
+
 export interface VoiceOptions {
   rate?: number;
   pitch?: number;
   lang?: string;
+  language?: VoiceLanguage;
 }
 
 export interface VoiceProvider {
@@ -27,10 +30,12 @@ export class BrowserVoiceProvider implements VoiceProvider {
       const u = new SpeechSynthesisUtterance(text);
       u.rate = opts.rate ?? 1.05;
       u.pitch = opts.pitch ?? 1.1;
-      if (opts.lang) u.lang = opts.lang;
-      // pick a natural-ish voice if available
+      const language = opts.language ?? "en";
+      const lang = opts.lang ?? (language === "id" ? "id-ID" : "en-US");
+      u.lang = lang;
+      // Prefer a voice matching the chosen language, then fall back gracefully.
       const voices = this.synth.getVoices();
-      const preferred = voices.find((v) => /en[-_]US/i.test(v.lang) && /female|samantha|zira|google us english/i.test(v.name));
+      const preferred = voices.find((v) => v.lang.toLowerCase().startsWith(language === "id" ? "id" : "en"));
       if (preferred) u.voice = preferred;
       u.onend = () => resolve();
       u.onerror = () => resolve();

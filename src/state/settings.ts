@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { voice } from "../engine/voice/VoiceService";
 import { audio } from "../engine/audio/AudioEngine";
 
+export type Language = "id" | "en";
+
 export interface Settings {
+  language: Language;
   nickname: string;
   ageRange: string;
   voiceOn: boolean;
@@ -14,6 +17,7 @@ export interface Settings {
 }
 
 const DEFAULT: Settings = {
+  language: "id",
   nickname: "Explorer",
   ageRange: "4-6",
   voiceOn: true,

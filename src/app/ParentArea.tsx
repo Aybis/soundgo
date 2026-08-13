@@ -42,6 +42,13 @@ export default function ParentArea() {
         <div className="rounded-3xl bg-white/80 border border-[#eadff5] p-4 flex flex-col gap-3">
           <h2 className="font-bold text-[#3a3352]">🧒 Child profile</h2>
           <label className="flex flex-col gap-1 text-sm text-[#3a3352]">
+            MAYA language / Bahasa MAYA
+            <select value={settings.language} onChange={(e) => update({ language: e.target.value as "id" | "en" })}>
+              <option value="id">Bahasa Indonesia</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-[#3a3352]">
             Nickname
             <input
               value={settings.nickname}

@@ -11,7 +11,9 @@ import { CameraStartOverlay } from "../../../components/camera/CameraStartOverla
 import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
 import { GameProgress } from "../../../components/ui/GameProgress";
 import { KidsButton } from "../../../components/ui/KidsButton";
-import { markCompleted } from "../../../state/settings";
+import { loadSettings, markCompleted } from "../../../state/settings";
+import { voice } from "../../../engine/voice/VoiceService";
+import { animalConversation, answerFeedback } from "../../../content/conversation";
 import { grabSubject, generateMixedSession } from "../../../content/grab-answer";
 import type { GrabQuestion } from "../../../content/grab-answer";
 
@@ -69,7 +71,11 @@ export default function GrabAnswerGame() {
       s.correctNow("Great!");
       setCorrect(s.correct);
       setMayaState("celebrating");
-      setBubble(q.options[idx].label + "! Yes!");
+      const language = loadSettings().language;
+      const animalId = q.options[idx].animalId;
+      const feedback = answerFeedback(language, true);
+      setBubble(animalId ? `${animalConversation(animalId, language).label}! ${feedback}` : feedback);
+      void voice().speak(animalId ? `${animalConversation(animalId, language).label}. ${feedback}` : feedback, { language });
       setBurst((b) => b + 1);
       setTimeout(() => nextQuestion(s), 1100);
     } else {
@@ -103,7 +109,12 @@ export default function GrabAnswerGame() {
     setQuestion(q);
     setLocked(false);
     setMayaState("waiting");
-    setBubble(q.prompt);
+    const language = loadSettings().language;
+    const prompt = q.options.find((option) => option.animalId)?.animalId
+      ? animalConversation(q.options.find((option) => option.animalId)!.animalId!, language)
+      : null;
+    const spokenPrompt = prompt?.prompt ?? q.prompt;
+    setBubble(spokenPrompt);
     // place targets along the lower-mid stage
     const w = window.innerWidth, h = window.innerHeight;
     const cy = h * 0.56;
@@ -111,7 +122,8 @@ export default function GrabAnswerGame() {
       x: w * (0.5 + (i - (q.options.length - 1) / 2) * 0.24),
       y: cy,
     }));
-    s.feedback.info(q.prompt, { voice: true, character: "waiting" });
+    void voice().speak(spokenPrompt, { language });
+    s.feedback.info(spokenPrompt, { voice: false, character: "waiting" });
   }
 
   function begin(questions: GrabQuestion[], n: number) {
@@ -190,7 +202,7 @@ export default function GrabAnswerGame() {
       {phase === "playing" && question && (
         <>
           <div className="absolute top-32 left-1/2 -translate-x-1/2 text-center z-10">
-            <div className="text-3xl font-black text-[#3a3352]">{question.prompt}</div>
+            <div className="max-w-2xl text-2xl md:text-3xl font-black text-[#3a3352]">{question.options.find((option) => option.animalId) ? animalConversation(question.options.find((option) => option.animalId)!.animalId!, loadSettings().language).prompt : question.prompt}</div>
             <div className="mt-1"><GameProgress current={qIndex} total={total} icon="⭐" /></div>
           </div>
 
