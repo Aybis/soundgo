@@ -14,6 +14,7 @@ import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
 import { GameProgress } from "../../../components/ui/GameProgress";
 import { KidsButton } from "../../../components/ui/KidsButton";
 import { markCompleted } from "../../../state/settings";
+import { useSessionLimit } from "../../../hooks/useSessionLimit";
 import { ai } from "../../../engine/ai/AIService";
 
 type Phase = "select" | "playing" | "complete";
@@ -31,6 +32,8 @@ export default function FingerMathGame() {
   const [mockCount, setMockCount] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
   const [mockScenario, setMockScenario] = useState<MockScenario>({});
+  const [sessionWrapUp, setSessionWrapUp] = useState(false);
+  const sessionLimit = useSessionLimit(phase === "playing");
 
   const { vision, mock, startCamera, startMock } = useCameraInput({
     requirements: { hands: true },
@@ -103,6 +106,14 @@ export default function FingerMathGame() {
   }
 
   function nextQuestion(s: GameSession) {
+    // A session limit never cuts a child off mid-answer; wrap up only after
+    // their just-finished success feedback has played.
+    if (sessionLimit.completeRound()) {
+      setSessionWrapUp(true);
+      setMayaState("celebrating");
+      setBubble("Great playing today! 💜");
+      return;
+    }
     const lvl = fingerLevel(levelRef.current);
     const next = qIndexRef.current + 1;
     if (next >= lvl.count) {
@@ -134,6 +145,7 @@ export default function FingerMathGame() {
     qIndexRef.current = 0;
     setQIndex(0);
     setCorrect(0);
+    setSessionWrapUp(false);
     resetAnswerState();
     setPhase("playing");
     phaseRef.current = "playing";
@@ -237,7 +249,16 @@ export default function FingerMathGame() {
         </>
       )}
 
-      {phase === "complete" && (
+      {sessionWrapUp && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-[#fff6ec]/90 backdrop-blur-sm anim-pop px-5 text-center">
+          <Character state="celebrating" message="Great playing today! 💜" size={150} />
+          <div className="text-2xl font-black text-[#3a3352]">Time for a little break!</div>
+          <div className="text-sm font-semibold text-[#8a7f9e]">You did an amazing job.</div>
+          <KidsButton onClick={() => navigate("/")}>GO HOME</KidsButton>
+        </div>
+      )}
+
+      {phase === "complete" && !sessionWrapUp && (
         <div className="flex flex-col items-center gap-4 anim-pop">
           <div className="text-6xl">🎉</div>
           <Character state="celebrating" message="AMAZING!" size={140} />
