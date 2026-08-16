@@ -18,6 +18,7 @@ import { useSessionLimit } from "../../../hooks/useSessionLimit";
 import { ai } from "../../../engine/ai/AIService";
 
 type Phase = "select" | "playing" | "complete";
+type AnswerMoment = { kind: "correct" | "wrong"; shown: number; expected: number };
 
 export default function FingerMathGame() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ export default function FingerMathGame() {
   const [seenCount, setSeenCount] = useState<number | null>(null);
   const [mockCount, setMockCount] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
+  const [answerMoment, setAnswerMoment] = useState<AnswerMoment | null>(null);
   const [mockScenario, setMockScenario] = useState<MockScenario>({});
   const [sessionWrapUp, setSessionWrapUp] = useState(false);
   const sessionLimit = useSessionLimit(phase === "playing");
@@ -72,10 +74,24 @@ export default function FingerMathGame() {
   const sm = useRef(new TemporalSmoothing<number>(5));
   const heldCount = useRef(new HoldDetector<number>(650));
   const answerLatch = useRef<number | null>(null);
+  const answerMomentTimer = useRef<number | null>(null);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
   useEffect(() => { levelRef.current = level; }, [level]);
+
+  useEffect(() => () => {
+    if (answerMomentTimer.current !== null) window.clearTimeout(answerMomentTimer.current);
+  }, []);
+
+  function showAnswerMoment(moment: AnswerMoment, duration: number) {
+    if (answerMomentTimer.current !== null) window.clearTimeout(answerMomentTimer.current);
+    setAnswerMoment(moment);
+    answerMomentTimer.current = window.setTimeout(() => {
+      setAnswerMoment(null);
+      answerMomentTimer.current = null;
+    }, duration);
+  }
 
   function handleAnswer(count: number) {
     const s = sessionRef.current;
@@ -83,28 +99,32 @@ export default function FingerMathGame() {
     if (!s || !p || phaseRef.current !== "playing") return;
     const streak = s.streak;
     if (count === p.answer) {
-      s.correctNow("Great!");
+      s.correctNow("Amazing! You got it! Great work!");
       setCorrect(s.correct);
       setMayaState("celebrating");
+      setBubble("🌟 Amazing! You got it! Great work!");
+      showAnswerMoment({ kind: "correct", shown: count, expected: p.answer }, 1200);
       // AI encouragement
       void ai().encourage({ game: "finger-math", correct: true, streak: streak + 1, attempts: s.attempts, level: levelRef.current, score: s.score }).then((line) => {
-        setBubble("✨ " + line);
+        setBubble("🌟 Great work! " + line);
       });
       setAccepted(p.answer);
       setBurst((b) => b + 1);
       setTimeout(() => nextQuestion(s), 1200);
     } else {
-      s.wrongNow("Try again!");
+      s.wrongNow("Nice try! Great effort. Let's try again!");
       setMayaState("encouraging");
+      setBubble(`🌟 Nice try! Great effort. Maya needs ${p.answer} finger${p.answer === 1 ? "" : "s"}. Try again!`);
+      showAnswerMoment({ kind: "wrong", shown: count, expected: p.answer }, 1000);
       const attempts = s.attempts;
       if (attempts >= 3) {
         // child is stuck — offer a hint
         void ai().hint({ game: "finger-math", correct: false, streak, attempts, level: levelRef.current, score: s.score }).then((h) => {
-          setBubble(`💡 ${h}`);
+          setBubble(`🌟 Nice effort! 💡 ${h}`);
         });
       } else {
         void ai().encourage({ game: "finger-math", correct: false, streak, attempts, level: levelRef.current, score: s.score }).then((line) => {
-          setBubble(line);
+          setBubble(`🌟 Nice try! ${line}`);
         });
       }
     }
@@ -114,6 +134,9 @@ export default function FingerMathGame() {
     sm.current.clear();
     heldCount.current.reset();
     answerLatch.current = null;
+    if (answerMomentTimer.current !== null) window.clearTimeout(answerMomentTimer.current);
+    answerMomentTimer.current = null;
+    setAnswerMoment(null);
     setAccepted(null);
     setSeenCount(null);
   }
@@ -302,8 +325,18 @@ export default function FingerMathGame() {
 
               {accepted !== null && (
                 <div className="anim-pop absolute inset-0 z-20 grid place-items-center bg-emerald-400/15 backdrop-blur-[2px]">
-                  <div className="rounded-[2rem] border-4 border-white bg-emerald-400 px-7 py-4 text-4xl font-black text-white shadow-xl">
-                    {accepted} ✓
+                  <div className="rounded-[2rem] border-4 border-white bg-emerald-400 px-7 py-4 text-center font-black text-white shadow-xl">
+                    <div className="text-4xl">🌟 Amazing!</div>
+                    <div className="mt-1 text-xl">{accepted} is right! Great work!</div>
+                  </div>
+                </div>
+              )}
+
+              {answerMoment?.kind === "wrong" && (
+                <div className="anim-pop pointer-events-none absolute inset-0 z-20 grid place-items-center bg-amber-300/15 backdrop-blur-[1px]">
+                  <div className="mx-4 rounded-[2rem] border-4 border-white bg-[#ffd166] px-7 py-4 text-center font-black text-[#4b4164] shadow-xl">
+                    <div className="text-3xl">🌟 Nice try!</div>
+                    <div className="mt-1 text-lg">Great effort! Show {answerMoment.expected} finger{answerMoment.expected === 1 ? "" : "s"}.</div>
                   </div>
                 </div>
               )}

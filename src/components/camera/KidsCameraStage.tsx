@@ -20,21 +20,21 @@ export function KidsCameraStage({ vision, hint, className = "", children, fit = 
     <div className={`kids-camera-stage relative overflow-hidden rounded-[1.8rem] bg-[#262238] ring-1 ring-white/40 ${className}`}>
       {/* live video */}
       <div
-        className={`kids-camera-video absolute inset-0 ${fit === "contain" ? "kids-camera-video--contain" : ""}`}
+        className={`kids-camera-video absolute inset-0 z-0 ${fit === "contain" ? "kids-camera-video--contain" : ""}`}
         ref={(el) => {
           if (el && vision.videoElement && !el.contains(vision.videoElement)) el.appendChild(vision.videoElement);
         }}
       />
-      <style>{`.kids-camera-video video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.kids-camera-video--contain video{object-fit:contain}`}</style>
+      <style>{`.kids-camera-video video{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.kids-camera-video--contain video{object-fit:contain}`}</style>
 
       {/* soft vignette */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%)" }} />
+      <div className="pointer-events-none absolute inset-0 z-[1]" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%)" }} />
 
       {/* ambient glow */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 30%, rgba(109,92,255,0.18), transparent 60%)" }} />
+      <div className="pointer-events-none absolute inset-0 z-[1]" style={{ background: "radial-gradient(circle at 50% 30%, rgba(109,92,255,0.18), transparent 60%)" }} />
 
       {/* floating particles */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         {AMBIENT.map((p, i) => (
           <span
             key={i}
@@ -52,7 +52,7 @@ export function KidsCameraStage({ vision, hint, className = "", children, fit = 
 
       {/* friendly hint */}
       {hint && (
-        <div className="absolute bottom-3 inset-x-3 flex justify-center pointer-events-none">
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex justify-center">
           <span className="max-w-full rounded-full border border-white/20 bg-[#2f2945]/75 px-4 py-2 text-center text-sm font-extrabold leading-tight text-white shadow-lg backdrop-blur-md">{hint}</span>
         </div>
       )}

@@ -23,6 +23,7 @@ export default function CopyPoseGame() {
   const [bubble, setBubble] = useState<string | null>("Copy my moves!");
   const [burst, setBurst] = useState(0);
   const [mockPose, setMockPose] = useState<string | null>(null);
+  const [holdProgress, setHoldProgress] = useState(0);
 
   const sessionRef = useRef<GameSession | null>(null);
   const phaseRef = useRef<Phase>("select");
@@ -40,17 +41,26 @@ export default function CopyPoseGame() {
 
   // match the target pose with a hold
   useEffect(() => {
-    if (phase !== "playing" || !pose || !poseCtrl.detected) return;
+    if (phase !== "playing" || !pose || !poseCtrl.detected) {
+      holdSince.current = null;
+      setHoldProgress(0);
+      return;
+    }
     const allMatch = pose.rules.every((r) => poseCtrl.matched.includes(r));
     const now = performance.now();
     if (allMatch) {
       if (holdSince.current === null) holdSince.current = now;
-      else if (now - holdSince.current >= 600 && !done.current) {
-        done.current = true;
-        onPoseMatched();
+      else {
+        const progress = Math.min(1, (now - holdSince.current) / 600);
+        setHoldProgress(progress);
+        if (progress >= 1 && !done.current) {
+          done.current = true;
+          onPoseMatched();
+        }
       }
     } else {
       holdSince.current = null;
+      setHoldProgress(0);
     }
   }, [poseCtrl.matched, poseCtrl.detected, phase, pose]);
 
@@ -82,6 +92,7 @@ export default function CopyPoseGame() {
     setRound(r);
     done.current = false;
     holdSince.current = null;
+    setHoldProgress(0);
     const p = POSES[(r - 1) % POSES.length];
     poseRef.current = p;
     setPose(p);
@@ -148,6 +159,23 @@ export default function CopyPoseGame() {
               <div className="text-7xl">{pose.emoji}</div>
               <h1 className="mt-1 text-3xl font-black">{pose.name}</h1>
               <p className="mt-2 font-bold text-[#746a89]">{pose.hint}</p>
+              <ol className="mt-4 grid gap-2 text-left">
+                {pose.steps.map((step, index) => (
+                  <li key={step} className="flex items-center gap-3 rounded-2xl bg-[#f4f0ff] px-3 py-2 text-sm font-extrabold text-[#51476a]">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#6d5cff] text-white">{index + 1}</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-4" aria-live="polite">
+                <div className="mb-1 flex justify-between text-xs font-black uppercase tracking-wide text-[#756a8a]">
+                  <span>{holdProgress > 0 ? "Hold still…" : "Copy the steps"}</span>
+                  <span>{Math.round(holdProgress * 100)}%</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-[#ded7f5]">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#6d5cff] to-[#06d6a0] transition-[width] duration-100" style={{ width: `${holdProgress * 100}%` }} />
+                </div>
+              </div>
             </div>
             <div className="flex min-h-28 items-center gap-3 rounded-[1.75rem] border-2 border-white bg-white/65 p-3">
               <Character state={mayaState} size={84} />

@@ -1,14 +1,21 @@
 // Grab the Answer content — one generic quiz engine, many subjects.
 // Options are rendered as text, emoji, or a color swatch depending on `kind`.
 
-export type OptionKind = "text" | "emoji" | "color";
+export type OptionKind = "text" | "emoji" | "color" | "image";
 
 export interface GrabOption {
   label: string;
   kind: OptionKind;
+  /** Stable answer identity that survives option shuffling. */
+  correct?: boolean;
   value?: string; // for "color" kind, a CSS color
   animalId?: string;
   imageAlt?: string;
+  imageSrc?: string;
+  /** Zero-based cell in a five-column horizontal sprite sheet. */
+  imageIndex?: number;
+  imageSize?: string;
+  imagePosition?: string;
   emoji?: string;
 }
 
@@ -35,6 +42,20 @@ const ANIMAL_VISUALS: Record<string, string> = {
   Duck: "duck",
   Lion: "lion",
 };
+const ANIMAL_IMAGES: Record<string, { index: number; size: string; position: string }> = {
+  Cat: { index: 0, size: "612% 100%", position: "0% 50%" },
+  Dog: { index: 1, size: "467% 100%", position: "20.5% 50%" },
+  Cow: { index: 2, size: "395% 100%", position: "48.7% 50%" },
+  Duck: { index: 3, size: "668% 100%", position: "72.5% 50%" },
+  Lion: { index: 4, size: "408% 100%", position: "100% 50%" },
+};
+const FOOD_IMAGES: Record<string, { index: number; size: string; position: string }> = {
+  APPLE: { index: 0, size: "513% 100%", position: "0% 50%" },
+  BANANA: { index: 1, size: "547% 100%", position: "26.8% 50%" },
+  GRAPES: { index: 2, size: "483% 100%", position: "50% 50%" },
+  CARROT: { index: 3, size: "547% 100%", position: "74.2% 50%" },
+  CAKE: { index: 4, size: "496% 100%", position: "100% 50%" },
+};
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = <T,>(arr: T[]): T[] => {
   const a = [...arr];
@@ -44,6 +65,18 @@ const shuffle = <T,>(arr: T[]): T[] => {
   }
   return a;
 };
+
+function buildQuestion(prompt: string, options: GrabOption[]): GrabQuestion {
+  const shuffled = shuffle(options);
+  const answerIndex = shuffled.findIndex((option) => option.correct === true);
+  if (answerIndex < 0) throw new Error(`Grab question has no correct answer: ${prompt}`);
+  return { prompt, options: shuffled, answerIndex };
+}
+
+/** Resolve the answer by stable identity, with index fallback for saved/legacy data. */
+export function correctGrabOption(question: GrabQuestion): GrabOption | undefined {
+  return question.options.find((option) => option.correct === true) ?? question.options[question.answerIndex];
+}
 
 export const GRAB_SUBJECTS: GrabSubject[] = [
   {
@@ -55,13 +88,13 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       Array.from({ length: 5 }, () => {
         const a = rand(1, 5), b = rand(1, 5);
         const answer = a + b;
-        const wrong = shuffle([answer + rand(1, 2), answer - rand(1, 2), answer + rand(2, 3)].map((n) => Math.max(1, n)));
-        const options = shuffle([
-          { label: String(answer), kind: "text" as const },
-          { label: String(wrong[0]), kind: "text" as const },
-          { label: String(wrong[1]), kind: "text" as const },
+        const wrong = shuffle([answer - 3, answer - 2, answer - 1, answer + 1, answer + 2, answer + 3]
+          .filter((value) => value >= 1)).slice(0, 2);
+        return buildQuestion(`What is ${a} + ${b}?`, [
+          { label: String(answer), kind: "text", correct: true },
+          { label: String(wrong[0]), kind: "text", correct: false },
+          { label: String(wrong[1]), kind: "text", correct: false },
         ]);
-        return { prompt: `What is ${a} + ${b}?`, options, answerIndex: options.findIndex((o) => o.label === String(answer)) };
       }),
   },
   {
@@ -74,8 +107,12 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       return Array.from({ length: 5 }, () => {
         const target = pick(COLORS);
         const others = shuffle(COLORS.filter((c) => c[0] !== target[0])).slice(0, 2);
-        const options = shuffle([target, ...others].map(([label, value]) => ({ label, kind: "color" as const, value })));
-        return { prompt: `Which one is ${target[0].toUpperCase()}?`, options, answerIndex: options.findIndex((o) => o.label === target[0]) };
+        return buildQuestion(`Which one is ${target[0].toUpperCase()}?`, [target, ...others].map(([label, value]) => ({
+          label,
+          kind: "color",
+          value,
+          correct: label === target[0],
+        })));
       });
     },
   },
@@ -89,13 +126,18 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       return Array.from({ length: 5 }, () => {
         const target = pick(ANIMALS);
         const others = shuffle(ANIMALS.filter((a) => a[0] !== target[0])).slice(0, 2);
-        const options = shuffle([target, ...others].map(([label, emoji]) => ({
+        const options = [target, ...others].map(([label, emoji]) => ({
           label,
-          kind: "emoji" as const,
+          kind: "image" as const,
+          correct: label === target[0],
           emoji,
           animalId: ANIMAL_VISUALS[label],
           imageAlt: `${label} animal`,
-        })));
+          imageSrc: "/answer-images/animals-v1.png",
+          imageIndex: ANIMAL_IMAGES[label].index,
+          imageSize: ANIMAL_IMAGES[label].size,
+          imagePosition: ANIMAL_IMAGES[label].position,
+        }));
         const promptByAnimal: Record<string, string> = {
           Cat: "Which animal has soft fur, whiskers, and likes to meow?",
           Dog: "Which animal barks, loves people, and likes to play?",
@@ -103,7 +145,7 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
           Duck: "Which animal has a beak, likes to swim, and says quack?",
           Lion: "Which animal has a big mane and is called the king of the jungle?",
         };
-        return { prompt: promptByAnimal[target[0]], options, answerIndex: options.findIndex((o) => o.animalId === ANIMAL_VISUALS[target[0]]) };
+        return buildQuestion(promptByAnimal[target[0]], options);
       });
     },
   },
@@ -117,8 +159,11 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       return Array.from({ length: 5 }, () => {
         const target = pick(SHAPES);
         const others = shuffle(SHAPES.filter((s) => s[0] !== target[0])).slice(0, 2);
-        const options = shuffle([target, ...others].map(([label, emoji]) => ({ label: `${emoji} ${label}`, kind: "emoji" as const })));
-        return { prompt: `Find the ${target[0].toLowerCase()}!`, options, answerIndex: options.findIndex((o) => o.label.includes(target[0])) };
+        return buildQuestion(`Find the ${target[0].toLowerCase()}!`, [target, ...others].map(([label, emoji]) => ({
+          label: `${emoji} ${label}`,
+          kind: "emoji",
+          correct: label === target[0],
+        })));
       });
     },
   },
@@ -132,8 +177,18 @@ export const GRAB_SUBJECTS: GrabSubject[] = [
       return Array.from({ length: 5 }, () => {
         const target = pick(WORDS);
         const others = shuffle(WORDS.filter((w) => w[0] !== target[0])).slice(0, 2);
-        const options = shuffle([target, ...others].map(([label, emoji]) => ({ label: `${emoji} ${label}`, kind: "emoji" as const })));
-        return { prompt: `Which one is ${target[0]}?`, options, answerIndex: options.findIndex((o) => o.label.includes(target[0])) };
+        const options = [target, ...others].map(([label, emoji]) => ({
+          label,
+          kind: "image" as const,
+          correct: label === target[0],
+          emoji,
+          imageAlt: `${label.toLowerCase()} food`,
+          imageSrc: "/answer-images/foods-v1.png",
+          imageIndex: FOOD_IMAGES[label].index,
+          imageSize: FOOD_IMAGES[label].size,
+          imagePosition: FOOD_IMAGES[label].position,
+        }));
+        return buildQuestion(`Which one is ${target[0]}?`, options);
       });
     },
   },

@@ -14,7 +14,7 @@ import { KidsButton } from "../../../components/ui/KidsButton";
 import { loadSettings, markCompleted } from "../../../state/settings";
 import { voice } from "../../../engine/voice/VoiceService";
 import { animalConversation, answerFeedback } from "../../../content/conversation";
-import { grabSubject, generateMixedSession } from "../../../content/grab-answer";
+import { correctGrabOption, grabSubject, generateMixedSession } from "../../../content/grab-answer";
 import type { GrabQuestion } from "../../../content/grab-answer";
 
 type Phase = "select" | "playing" | "complete";
@@ -32,6 +32,8 @@ export default function GrabAnswerGame() {
   const [bubble, setBubble] = useState<string | null>("Choose a game!");
   const [burst, setBurst] = useState(0);
   const [locked, setLocked] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ index: number; kind: "correct" | "wrong" } | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<GameSession | null>(null);
@@ -40,7 +42,11 @@ export default function GrabAnswerGame() {
   const qIndexRef = useRef(0);
   const totalRef = useRef(5);
   const positionsRef = useRef<TargetPos[]>([]);
+  const questionsRef = useRef<GrabQuestion[]>([]);
   const lastSelect = useRef(0);
+  const lockedRef = useRef(false);
+  const hoveredRef = useRef<number | null>(null);
+  const hoveredSince = useRef(0);
 
   const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { hands: true } });
   const { pointer, selectTick } = usePointerController(vision, stageRef, phase === "playing");
@@ -48,17 +54,40 @@ export default function GrabAnswerGame() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
 
-  // respond to selection ticks (hand pinch or mouse click)
+  // Track the single card under the camera pointer. The hit radius is kept
+  // below half the mobile card spacing so neighboring answers never overlap.
   useEffect(() => {
-    if (!selectTick || phaseRef.current !== "playing" || !questionRef.current) return;
-    // cooldown so a single pinch doesn't double-fire
-    const now = performance.now();
-    if (now - lastSelect.current < 400) return;
-    lastSelect.current = now;
+    if (phase !== "playing" || !pointer.present) {
+      hoveredRef.current = null;
+      setHoveredIndex(null);
+      return;
+    }
+    const hitRadius = Math.min(75, window.innerWidth * 0.11);
+    const idx = positionsRef.current.findIndex((p) => Math.hypot(p.x - pointer.x, p.y - pointer.y) < hitRadius);
+    const next = idx === -1 ? null : idx;
+    if (hoveredRef.current !== next) {
+      hoveredRef.current = next;
+      hoveredSince.current = performance.now();
+      setHoveredIndex(next);
+    }
+  }, [phase, pointer.present, pointer.x, pointer.y]);
 
-    // find the target the pointer is over
-    const idx = positionsRef.current.findIndex((p) => Math.hypot(p.x - pointer.x, p.y - pointer.y) < 90);
-    if (idx === -1) return; // not over any target
+  // Camera selection is deliberately point → settle → pinch. Mouse/touch uses
+  // the card's click handler directly and does not pass through this effect.
+  useEffect(() => {
+    if (!selectTick || phaseRef.current !== "playing" || !questionRef.current || pointer.source !== "hand") return;
+    const now = performance.now();
+    if (now - lastSelect.current < 500) return;
+    lastSelect.current = now;
+    const idx = hoveredRef.current;
+    if (idx === null) {
+      setBubble("Point at one answer first, then pinch. ☝️");
+      return;
+    }
+    if (now - hoveredSince.current < 120) {
+      setBubble("Hold on the answer, then pinch again. 🤏");
+      return;
+    }
     answer(idx);
     // `selectTick` is the event boundary; pointer coordinates are sampled at
     // that moment and must not retrigger an answer while the hand keeps moving.
@@ -68,9 +97,11 @@ export default function GrabAnswerGame() {
   function answer(idx: number) {
     const s = sessionRef.current;
     const q = questionRef.current;
-    if (!s || !q || locked) return;
+    if (!s || !q || lockedRef.current || locked) return;
+    lockedRef.current = true;
     setLocked(true);
-    if (idx === q.answerIndex) {
+    if (q.options[idx]?.correct === true || idx === q.answerIndex && !q.options.some((option) => option.correct === true)) {
+      setFeedback({ index: idx, kind: "correct" });
       s.correctNow("Great!");
       setCorrect(s.correct);
       setMayaState("celebrating");
@@ -82,10 +113,18 @@ export default function GrabAnswerGame() {
       setBurst((b) => b + 1);
       setTimeout(() => nextQuestion(s), 1100);
     } else {
-      s.wrongNow("Try again!");
+      setFeedback({ index: idx, kind: "wrong" });
+      const language = loadSettings().language;
+      const encouragement = answerFeedback(language, false);
+      s.wrongNow(language === "en" ? "Nice try! Great effort!" : "Usaha yang bagus! Coba lagi!");
       setMayaState("encouraging");
-      setBubble("Hmm, try another one!");
-      setLocked(false);
+      setBubble(`🌟 ${encouragement} ${language === "en" ? "Point and pinch another card!" : "Tunjuk dan cubit kartu lain!"}`);
+      void voice().speak(encouragement, { language });
+      setTimeout(() => {
+        lockedRef.current = false;
+        setLocked(false);
+        setFeedback(null);
+      }, 700);
     }
   }
 
@@ -101,8 +140,7 @@ export default function GrabAnswerGame() {
       markCompleted("Grab the Answer");
       return;
     }
-    const qs = generateMixedSession(totalRef.current);
-    loadQuestion(s, qs[next], next);
+    loadQuestion(s, questionsRef.current[next], next);
   }
 
   function loadQuestion(s: GameSession, q: GrabQuestion, idx: number) {
@@ -110,11 +148,16 @@ export default function GrabAnswerGame() {
     setQIndex(idx);
     questionRef.current = q;
     setQuestion(q);
+    lockedRef.current = false;
     setLocked(false);
+    setFeedback(null);
+    hoveredRef.current = null;
+    setHoveredIndex(null);
     setMayaState("waiting");
     const language = loadSettings().language;
-    const prompt = q.options.find((option) => option.animalId)?.animalId
-      ? animalConversation(q.options.find((option) => option.animalId)!.animalId!, language)
+    const correctAnimalId = correctGrabOption(q)?.animalId;
+    const prompt = correctAnimalId
+      ? animalConversation(correctAnimalId, language)
       : null;
     const spokenPrompt = prompt?.prompt ?? q.prompt;
     setBubble("Point, then pinch the right answer! 🤏");
@@ -132,6 +175,7 @@ export default function GrabAnswerGame() {
   function begin(questions: GrabQuestion[], n: number) {
     const s = new GameSession({ total: n });
     sessionRef.current = s;
+    questionsRef.current = questions;
     totalRef.current = n;
     setTotal(n);
     qIndexRef.current = 0;
@@ -202,9 +246,14 @@ export default function GrabAnswerGame() {
       {phase === "playing" && question && (
         <>
           <div className="absolute left-[116px] right-3 top-3 z-10 rounded-[1.5rem] border-2 border-white bg-white/85 px-3 py-3 text-center shadow-lg backdrop-blur sm:left-1/2 sm:right-auto sm:w-[min(62vw,680px)] sm:-translate-x-1/2 sm:px-6">
-            <div className="break-words text-lg font-black leading-tight text-[#3a3352] sm:text-3xl">{question.options.find((option) => option.animalId) ? animalConversation(question.options.find((option) => option.animalId)!.animalId!, loadSettings().language).prompt : question.prompt}</div>
+            <div className="break-words text-lg font-black leading-tight text-[#3a3352] sm:text-3xl">{correctGrabOption(question)?.animalId ? animalConversation(correctGrabOption(question)!.animalId!, loadSettings().language).prompt : question.prompt}</div>
             <div className="mt-1 hidden sm:block"><GameProgress current={qIndex} total={total} icon="⭐" /></div>
             <div className="mt-1 text-xs font-black text-[#817795] sm:hidden">⭐ {qIndex + 1}/{total}</div>
+            <div className="mt-2 flex items-center justify-center gap-1 text-[10px] font-black sm:gap-2 sm:text-xs">
+              <span className="rounded-full bg-[#eeeaff] px-2 py-1">1. POINT ☝️</span>
+              <span className="rounded-full bg-[#fff0c7] px-2 py-1">2. HOLD ⏳</span>
+              <span className="rounded-full bg-[#e4fff5] px-2 py-1">3. PINCH 🤏</span>
+            </div>
           </div>
 
           {/* targets */}
@@ -214,7 +263,8 @@ export default function GrabAnswerGame() {
               option={opt}
               x={positionsRef.current[i]?.x ?? window.innerWidth / 2}
               y={positionsRef.current[i]?.y ?? window.innerHeight / 2}
-              selected={false}
+              selected={hoveredIndex === i}
+              feedback={feedback?.index === i ? feedback.kind : null}
               onSelect={() => answer(i)}
             />
           ))}
