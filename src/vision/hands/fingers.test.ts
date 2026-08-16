@@ -24,6 +24,13 @@ function hand(fingers: number, flip = false): NormalizedPoint[] {
     lm[pip] = extended ? p(x, 0.42) : p(x, 0.5);
     lm[tip] = extended ? p(x, 0.3) : p(x, 0.55);
   });
+  // An open thumb reaches sideways, away from the palm. A folded thumb can
+  // remain straight but crosses the palm instead.
+  if (fingers > 0) {
+    lm[2] = p(0.4, 0.54);
+    lm[3] = p(0.3, 0.5);
+    lm[4] = p(0.2, 0.46);
+  }
   if (flip) {
     // mirror the whole hand in x — a flipped hand must still read the same
     for (let i = 0; i <= 20; i++) lm[i] = p(1 - lm[i].x, lm[i].y);
@@ -53,6 +60,18 @@ describe("countExtendedFingers", () => {
     lm[14] = p(0.4, 0.44);
     lm[16] = p(0.42, 0.5);
     expect(countExtendedFingers(lm)).toBe(2);
+  });
+  it("does not count a straight thumb folded across the palm", () => {
+    const lm = hand(3); // open thumb + index + middle
+    // Keep the thumb joints straight, but place the tip across the palm.
+    lm[2] = p(0.4, 0.52);
+    lm[3] = p(0.46, 0.5);
+    lm[4] = p(0.52, 0.48);
+    // Add the ring finger: this is the common three-finger pose children use.
+    lm[13] = p(0.55, 0.5);
+    lm[14] = p(0.55, 0.42);
+    lm[16] = p(0.55, 0.3);
+    expect(countExtendedFingers(lm)).toBe(3);
   });
   it("returns 0 for malformed input", () => {
     expect(countExtendedFingers([])).toBe(0);

@@ -6,6 +6,8 @@ interface Props {
   hint?: string;
   className?: string;
   children?: ReactNode;
+  /** Use contain for full-body games where feet and hands must stay visible. */
+  fit?: "cover" | "contain";
 }
 
 /**
@@ -13,17 +15,17 @@ interface Props {
  * floating particles so it feels like a magical portal — never a webcam demo.
  * No debug/latency/landmark info is ever shown to children.
  */
-export function KidsCameraStage({ vision, hint, className = "", children }: Props) {
+export function KidsCameraStage({ vision, hint, className = "", children, fit = "cover" }: Props) {
   return (
-    <div className={`relative overflow-hidden rounded-[2rem] bg-black/70 ${className}`}>
+    <div className={`kids-camera-stage relative overflow-hidden rounded-[1.8rem] bg-[#262238] ring-1 ring-white/40 ${className}`}>
       {/* live video */}
       <div
-        className="absolute inset-0"
+        className={`kids-camera-video absolute inset-0 ${fit === "contain" ? "kids-camera-video--contain" : ""}`}
         ref={(el) => {
           if (el && vision.videoElement && !el.contains(vision.videoElement)) el.appendChild(vision.videoElement);
         }}
       />
-      <style>{`video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}`}</style>
+      <style>{`.kids-camera-video video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.kids-camera-video--contain video{object-fit:contain}`}</style>
 
       {/* soft vignette */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%)" }} />
@@ -50,8 +52,8 @@ export function KidsCameraStage({ vision, hint, className = "", children }: Prop
 
       {/* friendly hint */}
       {hint && (
-        <div className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none">
-          <span className="px-4 py-2 rounded-full bg-black/40 backdrop-blur text-white text-sm font-bold">{hint}</span>
+        <div className="absolute bottom-3 inset-x-3 flex justify-center pointer-events-none">
+          <span className="max-w-full rounded-full border border-white/20 bg-[#2f2945]/75 px-4 py-2 text-center text-sm font-extrabold leading-tight text-white shadow-lg backdrop-blur-md">{hint}</span>
         </div>
       )}
 

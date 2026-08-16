@@ -24,6 +24,15 @@ function jointAngle(a: NormalizedPoint, b: NormalizedPoint, c: NormalizedPoint):
 // counting, which the old `tip.y < pip.y` test failed to do.
 const STRAIGHT = 145; // degrees
 
+function palmCenter(landmarks: NormalizedPoint[]): NormalizedPoint {
+  const palm = [landmarks[0], landmarks[5], landmarks[9], landmarks[13], landmarks[17]];
+  return {
+    x: palm.reduce((sum, point) => sum + point.x, 0) / palm.length,
+    y: palm.reduce((sum, point) => sum + point.y, 0) / palm.length,
+    z: palm.reduce((sum, point) => sum + (point.z ?? 0), 0) / palm.length,
+  };
+}
+
 /**
  * Count extended fingers (0..5) using joint collinearity. Robust to hand
  * orientation, mirroring, and slight curling.
@@ -34,8 +43,20 @@ export function countExtendedFingers(landmarks: NormalizedPoint[]): number {
   for (const f of ["index", "middle", "ring", "pinky"] as const) {
     if (jointAngle(landmarks[MCP[f]], landmarks[PIP[f]], landmarks[TIP[f]]) > STRAIGHT) count++;
   }
-  // thumb is straight when its IP joint is open
-  if (jointAngle(landmarks[MCP.thumb], landmarks[IP.thumb], landmarks[TIP.thumb]) > 130) count++;
+
+  // A folded thumb can still look perfectly straight at the IP joint. That is
+  // the common reason a child's "three" is read as four. Require the thumb tip
+  // to also travel clearly away from the palm. The radial test is independent
+  // of handedness, camera mirroring and hand rotation.
+  const center = palmCenter(landmarks);
+  const handSize = dist(landmarks[0], landmarks[MCP.middle]) || 1e-6;
+  const thumbIsStraight = jointAngle(
+    landmarks[MCP.thumb],
+    landmarks[IP.thumb],
+    landmarks[TIP.thumb],
+  ) > 135;
+  const thumbOpenness = dist(landmarks[TIP.thumb], center) - dist(landmarks[MCP.thumb], center);
+  if (thumbIsStraight && thumbOpenness / handSize > 0.12) count++;
   return count;
 }
 

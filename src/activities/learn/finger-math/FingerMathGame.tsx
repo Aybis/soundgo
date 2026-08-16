@@ -7,7 +7,7 @@ import { GameSession } from "../../../engine/session/GameSession";
 import { Character } from "../../../character/Character";
 import { fingerLevel } from "../../../content/finger-math";
 import type { FingerPrompt } from "../../../content/finger-math";
-import { TemporalSmoothing } from "../../../vision/stabilization/stabilization";
+import { HoldDetector, TemporalSmoothing } from "../../../vision/stabilization/stabilization";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
 import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
@@ -29,6 +29,7 @@ export default function FingerMathGame() {
   const [bubble, setBubble] = useState<string | null>("Choose a level!");
   const [correct, setCorrect] = useState(0);
   const [accepted, setAccepted] = useState<number | null>(null);
+  const [seenCount, setSeenCount] = useState<number | null>(null);
   const [mockCount, setMockCount] = useState<number | null>(null);
   const [burst, setBurst] = useState(0);
   const [mockScenario, setMockScenario] = useState<MockScenario>({});
@@ -40,16 +41,26 @@ export default function FingerMathGame() {
     mockScenario,
     onFrame: (f) => {
       if (phaseRef.current !== "playing" || !promptRef.current) return;
-      if (!f.hands.length) return;
+      if (!f.hands.length) {
+        sm.current.clear();
+        heldCount.current.reset();
+        answerLatch.current = null;
+        setSeenCount((count) => count === null ? count : null);
+        return;
+      }
       // count across ALL visible hands (kids use two hands for 6–10)
       const total = f.hands.reduce((s, h) => s + (h.fingerCount ?? 0), 0);
       sm.current.push(total);
       const mode = sm.current.read();
       if (mode === null) return;
-      const now = f.timestamp;
-      if (now - lastAnswerAt.current > 600) {
-        handleAnswer(mode, now);
-      }
+      setSeenCount((count) => count === mode ? count : mode);
+
+      // A hand pose must remain stable before it becomes an answer. A pose is
+      // evaluated only once, so a noisy frame never racks up repeated misses.
+      const stable = heldCount.current.update(mode, f.timestamp);
+      if (stable === null || stable === 0 || answerLatch.current === stable) return;
+      answerLatch.current = stable;
+      handleAnswer(stable);
     },
   });
 
@@ -59,17 +70,17 @@ export default function FingerMathGame() {
   const levelRef = useRef(1);
   const phaseRef = useRef<Phase>("select");
   const sm = useRef(new TemporalSmoothing<number>(5));
-  const lastAnswerAt = useRef(0);
+  const heldCount = useRef(new HoldDetector<number>(650));
+  const answerLatch = useRef<number | null>(null);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { qIndexRef.current = qIndex; }, [qIndex]);
   useEffect(() => { levelRef.current = level; }, [level]);
 
-  function handleAnswer(count: number, now: number) {
+  function handleAnswer(count: number) {
     const s = sessionRef.current;
     const p = promptRef.current;
     if (!s || !p || phaseRef.current !== "playing") return;
-    lastAnswerAt.current = now;
     const streak = s.streak;
     if (count === p.answer) {
       s.correctNow("Great!");
@@ -101,8 +112,10 @@ export default function FingerMathGame() {
 
   function resetAnswerState() {
     sm.current.clear();
-    lastAnswerAt.current = 0;
+    heldCount.current.reset();
+    answerLatch.current = null;
     setAccepted(null);
+    setSeenCount(null);
   }
 
   function nextQuestion(s: GameSession) {
@@ -133,7 +146,7 @@ export default function FingerMathGame() {
     promptRef.current = p;
     setPrompt(p);
     setMayaState("waiting");
-    setBubble(p.text);
+    setBubble("Hold your hands inside the magic frame! ✨");
     s.feedback.info(p.text, { voice: true, character: "waiting" });
   }
 
@@ -153,7 +166,7 @@ export default function FingerMathGame() {
     promptRef.current = p;
     setPrompt(p);
     setMayaState("waiting");
-    setBubble(p.text);
+    setBubble("I’m watching your hands! 👀");
     s.feedback.info(p.text, { voice: true, character: "waiting" });
   }
 
@@ -179,74 +192,142 @@ export default function FingerMathGame() {
     }
   }, [phase]);
 
+  const promptNumber = level <= 2 ? prompt?.answer : null;
+
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
-      <button
-        onClick={() => navigate("/learn")}
-        className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white"
-      >
-        ← Back
-      </button>
+    <div className="relative h-[100dvh] w-full overflow-y-auto bg-gradient-to-br from-[#fff8ed] via-[#fff1f7] to-[#eeeaff] text-[#3a3352]">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-12 top-24 h-40 w-40 rounded-full bg-[#ffd166]/25 blur-2xl" />
+        <div className="absolute -right-10 top-1/3 h-48 w-48 rounded-full bg-[#ff9db8]/25 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-48 w-48 rounded-full bg-[#8f80ff]/20 blur-3xl" />
+        <span className="absolute left-[7%] top-[18%] text-2xl anim-floaty">⭐</span>
+        <span className="absolute right-[6%] top-[12%] text-2xl anim-floaty" style={{ animationDelay: "0.8s" }}>✨</span>
+        <span className="absolute bottom-[10%] left-[4%] text-2xl anim-floaty" style={{ animationDelay: "1.4s" }}>●</span>
+      </div>
 
-      {/* camera gate — real camera is the default */}
-      {mock ? (
-        phase === "playing" && (
-          <div className="absolute bottom-20 right-4 z-20 text-xs text-[#8a7f9e] bg-white/70 border border-[#eadff5] px-3 py-1.5 rounded-full">
-            🖐️ mock · {mockCount ?? "—"} fingers
-          </div>
-        )
-      ) : vision.status !== "ready" ? (
+      {/* camera gate — shown after a child has chosen a level */}
+      {phase === "playing" && !mock && vision.status !== "ready" && (
         <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
-      ) : null}
+      )}
 
-      <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
 
-      {phase === "select" && (
-        <div className="flex flex-col gap-3 w-64">
-          {[1, 2, 3, 4].map((lvl) => (
-            <button
-              key={lvl}
-              onClick={() => startLevel(lvl)}
-              className="px-5 py-3 rounded-2xl bg-white/80 border border-[#eadff5] hover:border-[#6d5cff] hover:bg-white transition-colors text-left"
-            >
-              <span className="font-bold text-[#3a3352]">Level {lvl}</span>
-              <span className="text-xs text-[#8a7f9e] ml-2">{fingerLevel(lvl).label} · {fingerLevel(lvl).count} questions</span>
-            </button>
-          ))}
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        <button
+          onClick={() => navigate("/learn")}
+          className="min-h-11 rounded-full border-2 border-white bg-white/80 px-4 text-sm font-extrabold text-[#51496b] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"
+        >
+          ← Back
+        </button>
+        <div className="rounded-full bg-white/75 px-4 py-2 text-sm font-black tracking-wide shadow-sm">
+          <span aria-hidden="true">🖐️</span> Finger Magic
         </div>
+        {phase === "playing" ? (
+          <div className="min-w-[70px] text-right">
+            <span className="rounded-full bg-white/75 px-3 py-2 text-sm font-black shadow-sm sm:hidden">
+              ⭐ {qIndex + 1}/{fingerLevel(level).count}
+            </span>
+            <GameProgress current={qIndex} total={fingerLevel(level).count} icon="⭐" className="hidden gap-1 sm:flex" />
+          </div>
+        ) : (
+          <div className="w-[76px]" aria-hidden="true" />
+        )}
+      </header>
+
+      {phase === "select" && (
+        <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-76px)] w-full max-w-3xl flex-col items-center justify-center gap-5 px-5 pb-10 text-center">
+          <Character state={mayaState} message={bubble} size={132} />
+          <div>
+            <h1 className="text-3xl font-black sm:text-4xl">Pick your finger adventure!</h1>
+            <p className="mt-1 font-semibold text-[#817795]">Big buttons, five quick questions, lots of stars.</p>
+          </div>
+          <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
+            {["🌟", "🌈", "➕", "➖"].map((icon, index) => {
+              const lvl = index + 1;
+              return (
+                <button
+                  key={lvl}
+                  onClick={() => startLevel(lvl)}
+                  className="group flex min-h-24 items-center gap-4 rounded-[1.75rem] border-4 border-white bg-white/80 p-4 text-left shadow-[0_8px_0_rgba(109,92,255,0.12)] transition hover:-translate-y-1 hover:bg-white active:translate-y-1 active:shadow-none"
+                >
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#f1edff] text-3xl transition group-hover:rotate-6">{icon}</span>
+                  <span>
+                    <span className="block text-xl font-black">Level {lvl}</span>
+                    <span className="block text-sm font-bold text-[#817795]">{fingerLevel(lvl).label} · {fingerLevel(lvl).count} questions</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </main>
       )}
 
       {phase === "playing" && (
-        <>
-          <div className="text-center">
-            <div className="text-4xl font-black text-[#3a3352]">{prompt?.text}</div>
-            <div className="mt-2"><GameProgress current={qIndex} total={fingerLevel(level).count} icon="⭐" /></div>
-          </div>
-
-          {accepted !== null && (
-            <div className="anim-pop px-5 py-2 rounded-2xl bg-emerald-100 text-emerald-700 font-black text-3xl">
-              {accepted} ✓
+        <main className="relative z-10 mx-auto grid w-full max-w-6xl gap-4 px-4 pb-6 sm:gap-6 sm:px-6 lg:grid-cols-[minmax(270px,340px)_minmax(0,1fr)] lg:items-center">
+          <section className="flex min-w-0 flex-col gap-3">
+            <div
+              className="rounded-[2rem] border-4 border-white bg-white/80 px-5 py-5 text-center shadow-[0_12px_36px_rgba(82,65,140,0.12)] sm:px-7"
+              aria-label={prompt?.text}
+            >
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a78e8]">Maya says</div>
+              {promptNumber !== null && promptNumber !== undefined ? (
+                <div className="mt-1 flex items-center justify-center gap-3 sm:gap-4 lg:flex-col lg:gap-0">
+                  <span className="text-xl font-extrabold text-[#6d6480]">Show me</span>
+                  <span className="leading-none text-[clamp(4.5rem,18vw,8rem)] font-black text-[#6d5cff] drop-shadow-[0_5px_0_#d9d2ff]">{promptNumber}</span>
+                  <span className="text-xl font-extrabold text-[#6d6480]">finger{promptNumber === 1 ? "" : "s"}!</span>
+                </div>
+              ) : (
+                <div className="mt-3 break-words text-[clamp(2.5rem,10vw,4.5rem)] font-black leading-tight text-[#6d5cff]">{prompt?.text}</div>
+              )}
             </div>
-          )}
 
-          {/* camera stage — magical, no debug */}
-          <KidsCameraStage vision={vision} hint="Show your fingers! 🖐️" className="w-[min(90vw,420px)] h-52">
-            {mock && (
-              <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-2 px-4">
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => showMock(n)}
-                    className={`px-3 py-2 rounded-xl text-sm font-bold ${mockCount === n ? "bg-[#6d5cff] text-white" : "bg-white/80 text-[#3a3352]"}`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
-          </KidsCameraStage>
-        </>
+            <div className="flex min-h-28 items-center gap-3 rounded-[1.75rem] border-2 border-white/90 bg-white/65 p-3 shadow-sm" aria-live="polite">
+              <Character state={mayaState} size={88} />
+              <p className="min-w-0 flex-1 break-words text-base font-extrabold leading-snug text-[#51496b] sm:text-lg">{bubble}</p>
+            </div>
+          </section>
+
+          <section className="min-w-0 rounded-[2.25rem] border-4 border-white bg-white/55 p-2 shadow-[0_16px_45px_rgba(82,65,140,0.16)] sm:p-3">
+            <KidsCameraStage
+              vision={vision}
+              hint={seenCount === null ? "Put your whole hand inside ✋" : "Hold still… you’ve got this!"}
+              className="aspect-[4/3] w-full min-h-[260px] sm:min-h-[340px] lg:max-h-[610px]"
+            >
+              {!mock && (
+                <div className="absolute left-3 top-3 z-10 rounded-2xl bg-white/90 px-4 py-2 shadow-lg backdrop-blur" aria-live="polite">
+                  <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#817795]">Maya sees</div>
+                  <div className="text-2xl font-black text-[#6d5cff]">{seenCount === null ? "Finding hand…" : `${seenCount} finger${seenCount === 1 ? "" : "s"}`}</div>
+                </div>
+              )}
+
+              {accepted !== null && (
+                <div className="anim-pop absolute inset-0 z-20 grid place-items-center bg-emerald-400/15 backdrop-blur-[2px]">
+                  <div className="rounded-[2rem] border-4 border-white bg-emerald-400 px-7 py-4 text-4xl font-black text-white shadow-xl">
+                    {accepted} ✓
+                  </div>
+                </div>
+              )}
+
+              {mock && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-[#332d46]/80 px-4 py-5">
+                  <div className="font-black text-white">Testing: choose what Maya sees</div>
+                  <div className="flex max-w-md flex-wrap items-center justify-center gap-2">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => showMock(n)}
+                        className={`grid h-11 w-11 place-items-center rounded-xl text-base font-black ${mockCount === n ? "bg-[#ffd166] text-[#3a3352]" : "bg-white text-[#3a3352]"}`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </KidsCameraStage>
+            <p className="px-3 pb-1 pt-3 text-center text-sm font-bold text-[#746a89]">Keep your hand open and your whole palm in the frame.</p>
+          </section>
+        </main>
       )}
 
       {sessionWrapUp && (
@@ -259,7 +340,7 @@ export default function FingerMathGame() {
       )}
 
       {phase === "complete" && !sessionWrapUp && (
-        <div className="flex flex-col items-center gap-4 anim-pop">
+        <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-80px)] max-w-xl flex-col items-center justify-center gap-4 px-5 pb-12 text-center anim-pop">
           <div className="text-6xl">🎉</div>
           <Character state="celebrating" message="AMAZING!" size={140} />
           <GameProgress current={correct} total={fingerLevel(level).count} icon="⭐" />

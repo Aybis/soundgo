@@ -123,7 +123,7 @@ export default function FollowBeatPage() {
         ← Back
       </button>
 
-      {!mock && vision.status !== "ready" && (
+      {phase === "playing" && !mock && vision.status !== "ready" && (
         <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
       )}
 

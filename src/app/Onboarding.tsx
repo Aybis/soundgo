@@ -7,7 +7,7 @@ import { KidsCameraStage } from "../components/camera/KidsCameraStage";
 import { CameraStartOverlay } from "../components/camera/CameraStartOverlay";
 import { Confetti } from "../components/feedback/Confetti";
 import { voice } from "../engine/voice/VoiceService";
-import { TemporalSmoothing } from "../vision/stabilization/stabilization";
+import { HoldDetector, TemporalSmoothing } from "../vision/stabilization/stabilization";
 
 type Step = "intro" | "camera" | "wave" | "fingers" | "done";
 
@@ -17,9 +17,11 @@ export default function Onboarding() {
   const [mayaState, setMayaState] = useState<Parameters<typeof Character>[0]["state"]>("happy");
   const [bubble, setBubble] = useState("Hi! I'm MAYA! 👋");
   const [burst, setBurst] = useState(0);
+  const [seenCount, setSeenCount] = useState<number | null>(null);
 
   const stepRef = useRef<Step>("intro");
   const sm = useRef(new TemporalSmoothing<number>(5));
+  const heldCount = useRef(new HoldDetector<number>(650));
   const doneRef = useRef(false);
 
   useEffect(() => { stepRef.current = step; }, [step]);
@@ -28,11 +30,18 @@ export default function Onboarding() {
     requirements: { hands: true },
     onFrame: (f) => {
       if (stepRef.current !== "fingers" || doneRef.current) return;
-      if (!f.hands.length) return;
+      if (!f.hands.length) {
+        sm.current.clear();
+        heldCount.current.reset();
+        setSeenCount((count) => count === null ? count : null);
+        return;
+      }
       const total = f.hands.reduce((s, h) => s + (h.fingerCount ?? 0), 0);
       sm.current.push(total);
       const mode = sm.current.read();
-      if (mode === 3) {
+      setSeenCount((count) => count === mode ? count : mode);
+      const stable = mode === null ? null : heldCount.current.update(mode, f.timestamp);
+      if (stable === 3) {
         doneRef.current = true;
         setMayaState("celebrating");
         setBubble("Perfect! Let's play! 🎉");
@@ -56,6 +65,8 @@ export default function Onboarding() {
       voice().speak("Yay! I can see you!");
       setTimeout(() => {
         sm.current.clear();
+        heldCount.current.reset();
+        setSeenCount(null);
         setStep("fingers");
         stepRef.current = "fingers";
         setMayaState("waiting");
@@ -74,7 +85,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#eef2ff] flex flex-col items-center justify-center gap-5 px-5">
+    <div className="relative flex h-[100dvh] w-full flex-col items-center justify-start gap-5 overflow-y-auto bg-gradient-to-b from-[#fff6ec] to-[#eef2ff] px-5 py-20 sm:justify-center">
       {/* floating shapes */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute top-10 left-10 h-6 w-6 rounded-full bg-[#ffd166] opacity-40 anim-floaty" />
@@ -83,6 +94,10 @@ export default function Onboarding() {
       </div>
 
       <Confetti trigger={burst} />
+
+      {(step === "wave" || step === "fingers") && !mock && vision.status !== "ready" && (
+        <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
+      )}
 
       {/* intro */}
       {step === "intro" && (
@@ -118,12 +133,13 @@ export default function Onboarding() {
 
       {/* wave step */}
       {step === "wave" && (
-        <>
-          <Character state="wave" message={bubble} size={150} />
-          <KidsCameraStage vision={vision} hint="Wave hello! 👋" className="w-[min(90vw,420px)] h-56">
-            {!mock && vision.status !== "ready" && (
-              <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
-            )}
+        <section className="relative z-10 grid w-full max-w-4xl items-center gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="flex flex-col items-center gap-3 rounded-[2rem] border-4 border-white bg-white/70 p-5 text-center shadow-lg">
+            <Character state="wave" size={112} />
+            <h1 className="text-3xl font-black text-[#3a3352]">Wave hello! 👋</h1>
+            <p className="font-bold text-[#746a89]">{bubble}</p>
+          </div>
+          <KidsCameraStage vision={vision} hint="Move your hand side to side 👋" className="aspect-[4/3] w-full min-h-[280px] sm:min-h-[360px]">
             {mock && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                 <span className="text-zinc-300 text-sm">🖐️ mock mode</span>
@@ -133,16 +149,30 @@ export default function Onboarding() {
               </div>
             )}
           </KidsCameraStage>
-        </>
+        </section>
       )}
 
       {/* fingers step */}
       {step === "fingers" && (
-        <>
-          <Character state="waiting" message={bubble} size={150} />
-          <KidsCameraStage vision={vision} hint="Show me 3 fingers ✌️" className="w-[min(90vw,420px)] h-56">
+        <section className="relative z-10 grid w-full max-w-4xl items-center gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="rounded-[2rem] border-4 border-white bg-white/75 p-5 text-center shadow-lg">
+            <div className="text-xs font-black uppercase tracking-[0.2em] text-[#8a78e8]">Show me</div>
+            <div className="text-8xl font-black leading-none text-[#6d5cff] drop-shadow-[0_5px_0_#d9d2ff]">3</div>
+            <div className="text-2xl font-black text-[#51496b]">fingers!</div>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <Character state="waiting" size={74} />
+              <p className="max-w-32 text-left text-sm font-bold leading-tight text-[#746a89]">Hold them still for Maya.</p>
+            </div>
+          </div>
+          <KidsCameraStage vision={vision} hint="Keep your whole palm in the frame ✋" className="aspect-[4/3] w-full min-h-[280px] sm:min-h-[360px]">
+            {!mock && (
+              <div className="absolute left-3 top-3 z-10 rounded-2xl bg-white/90 px-4 py-2 shadow-lg backdrop-blur" aria-live="polite">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#817795]">Maya sees</div>
+                <div className="text-2xl font-black text-[#6d5cff]">{seenCount === null ? "Finding hand…" : `${seenCount} finger${seenCount === 1 ? "" : "s"}`}</div>
+              </div>
+            )}
             {mock && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-y-auto bg-[#332d46]/75 py-4">
                 <span className="text-zinc-300 text-sm">🖐️ mock mode</span>
                 {[0,1,2,3].map((n) => (
                   <KidsButton key={n} variant="secondary" size="md" onClick={() => {
@@ -150,13 +180,13 @@ export default function Onboarding() {
                       (vision.provider as any).setScenario({ hands: [{ fingers: n }] });
                     }
                   }}>
-                    {n} fingers
+                    {n} finger{n === 1 ? "" : "s"}
                   </KidsButton>
                 ))}
               </div>
             )}
           </KidsCameraStage>
-        </>
+        </section>
       )}
 
       {/* done — quick thanks before navigating */}

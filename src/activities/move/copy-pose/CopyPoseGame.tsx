@@ -6,6 +6,7 @@ import { GameSession } from "../../../engine/session/GameSession";
 import { Character } from "../../../character/Character";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
+import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
 import { POSES } from "../../../content/move";
 import type { PoseDef } from "../../../content/move";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
@@ -51,7 +52,7 @@ export default function CopyPoseGame() {
     } else {
       holdSince.current = null;
     }
-  }, [poseCtrl.matched, phase, pose]);
+  }, [poseCtrl.matched, poseCtrl.detected, phase, pose]);
 
   function onPoseMatched() {
     const s = sessionRef.current;
@@ -113,67 +114,76 @@ export default function CopyPoseGame() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-4 px-4">
-      <button onClick={() => navigate("/move")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
-        ← Back
-      </button>
+    <div className="relative h-[100dvh] w-full overflow-y-auto bg-gradient-to-br from-[#fff8ed] via-[#f3f7ff] to-[#eeeaff] text-[#3a3352]">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        <button onClick={() => navigate("/move")} className="min-h-11 rounded-full border-2 border-white bg-white/85 px-4 text-sm font-extrabold shadow-sm">← Back</button>
+        <div className="rounded-full bg-white/80 px-4 py-2 text-sm font-black shadow-sm">🤸 Copy Me!</div>
+        <div className="min-w-[72px] text-right text-sm font-black">{phase === "playing" ? `⭐ ${round}/5` : ""}</div>
+      </header>
 
       {/* camera gate — real camera is the default */}
-      {!mock && vision.status !== "ready" && (
+      {phase === "playing" && !mock && vision.status !== "ready" && (
         <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
       )}
 
-      <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
 
       {phase === "select" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-2xl font-bold text-[#3a3352]">Copy Me!</div>
-          <div className="text-sm text-[#8a7f9e]">5 poses · MAYA shows, you copy!</div>
-          <button onClick={startGame} className="px-8 py-3 rounded-full bg-[#6d5cff] text-white font-medium hover:bg-[#5a4ce6]">
-            Start
+        <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-76px)] max-w-xl flex-col items-center justify-center gap-5 px-5 pb-12 text-center">
+          <Character state={mayaState} message={bubble} size={150} />
+          <div>
+            <h1 className="text-4xl font-black">Can you copy Maya?</h1>
+            <p className="mt-2 text-lg font-bold text-[#817795]">Five silly poses. Hold each one to win a star!</p>
+          </div>
+          <button onClick={startGame} className="min-h-16 rounded-full bg-[#6d5cff] px-10 text-xl font-black text-white shadow-[0_7px_0_#4a3fd1] active:translate-y-1 active:shadow-none">
+            START MOVING
           </button>
-        </div>
+        </main>
       )}
 
       {phase === "playing" && pose && (
-        <>
-          <div className="text-center">
-            <div className="text-5xl">{pose.emoji}</div>
-            <div className="text-2xl font-bold text-[#3a3352] mt-2">{pose.name}</div>
-            <div className="text-sm text-[#8a7f9e] mt-1">Round {round}/5 · ⭐ {score}</div>
-          </div>
-
-          {poseCtrl.calibrating && (
-            <div className="px-4 py-2 rounded-full bg-[#6d5cff]/10 text-[#6d5cff] text-sm">Calibrating — stand so I can see you…</div>
-          )}
-
-          {/* mock pose buttons */}
-          {mock && (
-            <div className="flex flex-wrap justify-center gap-2 max-w-sm">
-              {POSES.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => showMockPose(p.id)}
-                  className={`px-3 py-2 rounded-xl text-sm font-medium ${mockPose === p.id ? "bg-[#6d5cff] text-white" : "bg-white/80 text-[#3a3352] border border-[#eadff5]"}`}
-                >
-                  {p.emoji} {p.name}
-                </button>
-              ))}
+        <main className="relative z-10 mx-auto grid w-full max-w-6xl gap-5 px-4 pb-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-center">
+          <section className="flex flex-col gap-3">
+            <div className="rounded-[2rem] border-4 border-white bg-white/80 p-5 text-center shadow-lg">
+              <div className="text-7xl">{pose.emoji}</div>
+              <h1 className="mt-1 text-3xl font-black">{pose.name}</h1>
+              <p className="mt-2 font-bold text-[#746a89]">{pose.hint}</p>
             </div>
-          )}
-        </>
+            <div className="flex min-h-28 items-center gap-3 rounded-[1.75rem] border-2 border-white bg-white/65 p-3">
+              <Character state={mayaState} size={84} />
+              <p className="min-w-0 flex-1 text-lg font-extrabold leading-snug">{bubble}</p>
+            </div>
+            {mock && (
+              <div className="grid grid-cols-2 gap-2 rounded-3xl bg-white/60 p-3 sm:flex sm:flex-wrap sm:justify-center">
+                {POSES.map((p) => (
+                  <button key={p.id} onClick={() => showMockPose(p.id)} className={`rounded-xl px-3 py-2 text-sm font-bold ${mockPose === p.id ? "bg-[#6d5cff] text-white" : "bg-white text-[#3a3352]"}`}>
+                    {p.emoji} {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-[2.25rem] border-4 border-white bg-white/55 p-3 shadow-xl">
+            <KidsCameraStage vision={vision} fit="contain" hint="Step back so Maya can see your whole body 🤸" className="aspect-[4/3] w-full min-h-[250px] sm:min-h-[420px]">
+              <div className={`absolute left-3 top-3 z-10 rounded-2xl px-4 py-2 font-black shadow-lg backdrop-blur ${poseCtrl.detected ? "bg-emerald-100/95 text-emerald-700" : "bg-white/90 text-[#6d5cff]"}`} aria-live="polite">
+                {poseCtrl.detected ? "✓ I can see you!" : poseCtrl.calibrating ? "Finding your whole body…" : "Stand inside the frame"}
+              </div>
+            </KidsCameraStage>
+          </section>
+        </main>
       )}
 
       {phase === "complete" && (
-        <div className="flex flex-col items-center gap-4">
+        <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-76px)] flex-col items-center justify-center gap-4 px-5 pb-12 text-center">
           <div className="text-5xl">🎉</div>
-          <div className="text-2xl font-bold text-[#3a3352]">Great job!</div>
-          <div className="text-lg text-[#8a7f9e]">Score: ⭐ {score}</div>
-          <button onClick={startGame} className="px-6 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-medium hover:bg-[#5a4ce6]">
-            Play again
+          <Character state="celebrating" message="You copied every pose!" size={140} />
+          <div className="text-3xl font-black">Great job!</div>
+          <div className="text-lg font-bold text-[#8a7f9e]">Score: ⭐ {score}</div>
+          <button onClick={startGame} className="min-h-14 rounded-full bg-[#6d5cff] px-8 text-lg font-black text-white shadow-[0_6px_0_#4a3fd1]">
+            PLAY AGAIN
           </button>
-        </div>
+        </main>
       )}
     </div>
   );

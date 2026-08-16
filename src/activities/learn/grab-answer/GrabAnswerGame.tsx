@@ -60,6 +60,9 @@ export default function GrabAnswerGame() {
     const idx = positionsRef.current.findIndex((p) => Math.hypot(p.x - pointer.x, p.y - pointer.y) < 90);
     if (idx === -1) return; // not over any target
     answer(idx);
+    // `selectTick` is the event boundary; pointer coordinates are sampled at
+    // that moment and must not retrigger an answer while the hand keeps moving.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectTick]);
 
   function answer(idx: number) {
@@ -114,7 +117,7 @@ export default function GrabAnswerGame() {
       ? animalConversation(q.options.find((option) => option.animalId)!.animalId!, language)
       : null;
     const spokenPrompt = prompt?.prompt ?? q.prompt;
-    setBubble(spokenPrompt);
+    setBubble("Point, then pinch the right answer! 🤏");
     // place targets along the lower-mid stage
     const w = window.innerWidth, h = window.innerHeight;
     const cy = h * 0.56;
@@ -151,7 +154,7 @@ export default function GrabAnswerGame() {
   return (
     <div
       ref={stageRef}
-      className="relative h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff]"
+      className="relative h-[100dvh] w-full overflow-hidden bg-gradient-to-br from-[#fff8ed] via-[#fff1f7] to-[#eeeaff]"
     >
       <button
         onClick={() => navigate("/learn")}
@@ -161,33 +164,30 @@ export default function GrabAnswerGame() {
       </button>
 
       {/* camera gate — real camera is the default */}
-      {!mock && vision.status !== "ready" && (
+      {phase === "playing" && !mock && vision.status !== "ready" && (
         <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
       )}
 
-      <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1">
-        <Character state={mayaState} message={bubble} size={110} />
-      </div>
-
       {phase === "select" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          <div className="text-3xl font-black text-[#3a3352]">Grab the Answer!</div>
+        <div className="absolute inset-0 flex flex-col items-center gap-4 overflow-y-auto px-5 pb-8 pt-20 text-center">
+          <Character state={mayaState} message={bubble} size={92} />
+          <div className="text-3xl font-black text-[#3a3352] sm:text-4xl">Grab the Answer!</div>
           <button
             onClick={startMixed}
-            className="w-80 px-6 py-5 rounded-[2rem] bg-gradient-to-br from-[#ffb36b] to-[#ff8c42] text-center shadow-lg hover:scale-[1.03] transition-transform"
+            className="w-full max-w-80 px-6 py-5 rounded-[2rem] border-4 border-white bg-gradient-to-br from-[#ffb36b] to-[#ff8c42] text-center shadow-[0_8px_0_rgba(220,101,29,0.18)] hover:scale-[1.03] transition-transform"
           >
             <div className="text-3xl">🌟</div>
             <div className="font-extrabold text-white text-xl">Adventure</div>
             <div className="text-xs text-white/80 font-semibold">Numbers · Colors · Shapes · Animals — 8 questions</div>
           </button>
-          <div className="grid grid-cols-2 gap-3 w-80">
+          <div className="grid w-full max-w-80 grid-cols-2 gap-3">
             {["math", "colors", "animals", "shapes", "vocab"].map((id) => {
               const s = grabSubject(id);
               return (
                 <button
                   key={id}
                   onClick={() => startSubject(id)}
-                  className="px-4 py-4 rounded-2xl bg-white/85 border border-[#eadff5] hover:border-[#6d5cff] hover:bg-white transition-colors text-center"
+                  className="min-h-28 rounded-2xl border-2 border-white bg-white/85 px-4 py-4 text-center shadow-sm transition-colors hover:border-[#6d5cff] hover:bg-white"
                 >
                   <div className="text-3xl">{s.emoji}</div>
                   <div className="font-bold text-[#3a3352] mt-1">{s.title}</div>
@@ -201,9 +201,10 @@ export default function GrabAnswerGame() {
 
       {phase === "playing" && question && (
         <>
-          <div className="absolute top-32 left-1/2 -translate-x-1/2 text-center z-10">
-            <div className="max-w-2xl text-2xl md:text-3xl font-black text-[#3a3352]">{question.options.find((option) => option.animalId) ? animalConversation(question.options.find((option) => option.animalId)!.animalId!, loadSettings().language).prompt : question.prompt}</div>
-            <div className="mt-1"><GameProgress current={qIndex} total={total} icon="⭐" /></div>
+          <div className="absolute left-[116px] right-3 top-3 z-10 rounded-[1.5rem] border-2 border-white bg-white/85 px-3 py-3 text-center shadow-lg backdrop-blur sm:left-1/2 sm:right-auto sm:w-[min(62vw,680px)] sm:-translate-x-1/2 sm:px-6">
+            <div className="break-words text-lg font-black leading-tight text-[#3a3352] sm:text-3xl">{question.options.find((option) => option.animalId) ? animalConversation(question.options.find((option) => option.animalId)!.animalId!, loadSettings().language).prompt : question.prompt}</div>
+            <div className="mt-1 hidden sm:block"><GameProgress current={qIndex} total={total} icon="⭐" /></div>
+            <div className="mt-1 text-xs font-black text-[#817795] sm:hidden">⭐ {qIndex + 1}/{total}</div>
           </div>
 
           {/* targets */}
@@ -221,7 +222,13 @@ export default function GrabAnswerGame() {
           <GestureCursor pointer={pointer} />
           <Confetti trigger={burst} />
 
-          <KidsCameraStage vision={vision} className="absolute bottom-4 left-4 z-10 w-44 h-32" />
+          <div className="absolute bottom-3 left-3 z-10 h-20 w-28 sm:bottom-4 sm:left-4 sm:h-32 sm:w-44">
+            <KidsCameraStage vision={vision} className="h-full w-full" />
+          </div>
+          <div className="absolute bottom-3 right-3 z-10 flex max-w-[210px] items-center gap-2 rounded-[1.5rem] border-2 border-white bg-white/80 p-2 shadow-lg backdrop-blur" aria-live="polite">
+            <Character state={mayaState} size={64} />
+            <p className="min-w-0 flex-1 break-words text-sm font-extrabold leading-tight text-[#51496b]">{bubble}</p>
+          </div>
         </>
       )}
 

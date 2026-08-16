@@ -4,6 +4,7 @@ import { useCameraInput } from "../../../hooks/useCameraInput";
 import { Character } from "../../../character/Character";
 import { Confetti } from "../../../components/feedback/Confetti";
 import { CameraStartOverlay } from "../../../components/camera/CameraStartOverlay";
+import { KidsCameraStage } from "../../../components/camera/KidsCameraStage";
 import { SQUAT_TARGETS } from "../../../content/move";
 import { voice } from "../../../engine/voice/VoiceService";
 import { MockVisionProvider } from "../../../vision/providers/MockVisionProvider";
@@ -20,13 +21,17 @@ export default function SquatGame() {
   const [mayaState, setMayaState] = useState<"happy" | "celebrating" | "waiting" | "encouraging">("happy");
   const [bubble, setBubble] = useState<string | null>("Let's do squats!");
   const [burst, setBurst] = useState(0);
+  const [bodySeen, setBodySeen] = useState(false);
 
   const phaseRef = useRef<Phase>("select");
   const targetRef = useRef(target);
   const repsRef = useRef(0);
   const done = useRef(false);
 
-  const { vision, mock, startCamera, startMock } = useCameraInput({ requirements: { pose: true } });
+  const { vision, mock, startCamera, startMock } = useCameraInput({
+    requirements: { pose: true },
+    onFrame: (frame) => setBodySeen((seen) => seen === !!frame.pose ? seen : !!frame.pose),
+  });
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { targetRef.current = target; }, [target]);
@@ -56,7 +61,7 @@ export default function SquatGame() {
 
   // countdown
   useEffect(() => {
-    if (phase !== "countdown") return;
+    if (phase !== "countdown" || vision.status !== "ready") return;
     setCount(3);
     voice().speak("Ready? Three, two, one, go!");
     const iv = setInterval(() => {
@@ -75,7 +80,7 @@ export default function SquatGame() {
     }, 1000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, vision.status]);
 
   function start(targetN: number) {
     setTarget(targetN);
@@ -97,55 +102,70 @@ export default function SquatGame() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-b from-[#fff6ec] to-[#f3ecff] flex flex-col items-center justify-center gap-6 px-4">
-      <button onClick={() => navigate("/move")} className="absolute top-5 left-5 z-20 px-4 py-2 rounded-full bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium hover:bg-white">
-        ← Back
-      </button>
+    <div className="relative h-[100dvh] w-full overflow-y-auto bg-gradient-to-br from-[#fff8ed] via-[#f1fff9] to-[#e9f0ff] text-[#3a3352]">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        <button onClick={() => navigate("/move")} className="min-h-11 rounded-full border-2 border-white bg-white/85 px-4 text-sm font-extrabold shadow-sm">← Back</button>
+        <div className="rounded-full bg-white/80 px-4 py-2 text-sm font-black shadow-sm">🚀 Squat Rocket</div>
+        <div className="min-w-[70px] text-right text-sm font-black">{phase === "playing" ? `${reps}/${target}` : ""}</div>
+      </header>
 
       {/* camera gate — real camera is the default */}
-      {!mock && vision.status !== "ready" && (
+      {phase !== "select" && !mock && vision.status !== "ready" && (
         <CameraStartOverlay status={vision.status} error={vision.error} mock={mock} onStart={startCamera} onUseMock={startMock} />
       )}
 
-      <Character state={mayaState} message={bubble} size={130} />
       <Confetti trigger={burst} />
 
       {phase === "select" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-2xl font-bold text-[#3a3352]">Squat Challenge!</div>
-          <div className="text-sm text-[#8a7f9e]">How many squats?</div>
-          <div className="flex gap-3">
+        <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-76px)] max-w-xl flex-col items-center justify-center gap-5 px-5 pb-12 text-center">
+          <Character state={mayaState} message={bubble} size={145} />
+          <div>
+            <h1 className="text-4xl font-black">Squat Rocket!</h1>
+            <p className="mt-2 text-lg font-bold text-[#817795]">How many rocket launches can you do?</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
             {SQUAT_TARGETS.map((n) => (
-              <button key={n} onClick={() => start(n)} className="px-6 py-3 rounded-2xl bg-white/85 border border-[#eadff5] hover:border-[#6d5cff] text-xl font-bold text-[#3a3352]">
-                {n}
+              <button key={n} onClick={() => start(n)} className="grid min-h-20 min-w-24 place-items-center rounded-[1.75rem] border-4 border-white bg-white/85 px-6 text-3xl font-black shadow-[0_7px_0_rgba(6,214,160,0.2)] active:translate-y-1 active:shadow-none">
+                {n}<span className="text-xs text-[#817795]">squats</span>
               </button>
             ))}
           </div>
-        </div>
+        </main>
       )}
 
       {phase === "countdown" && (
-        <div className="text-8xl font-bold text-[#6d5cff] animate-pulse">{count > 0 ? count : "GO!"}</div>
+        <main className="relative z-10 flex min-h-[calc(100dvh-76px)] flex-col items-center justify-center gap-5 pb-12">
+          <Character state="encouraging" message="Ready, rocket?" size={120} />
+          <div className="text-9xl font-black text-[#6d5cff] animate-pulse">{count > 0 ? count : "GO!"}</div>
+        </main>
       )}
 
       {phase === "playing" && (
-        <div className="flex flex-col items-center gap-4 w-full max-w-sm">
-          <div className="text-6xl font-bold text-[#3a3352]">{reps} <span className="text-2xl text-[#8a7f9e]">/ {target}</span></div>
-          <div className="w-full h-4 rounded-full bg-white/70 overflow-hidden">
-            <div className="h-full bg-[#6d5cff] transition-all duration-300" style={{ width: `${progress * 100}%` }} />
-          </div>
-          <div className="text-[#8a7f9e] text-sm">Squat down, stand up!</div>
-          {mock && (
-            <div className="flex gap-2">
-              <button onClick={() => setSquat(true)} className="px-4 py-2 rounded-xl bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium">⬇ Squat</button>
-              <button onClick={() => setSquat(false)} className="px-4 py-2 rounded-xl bg-white/80 border border-[#eadff5] text-[#3a3352] text-sm font-medium">⬆ Stand</button>
+        <main className="relative z-10 mx-auto grid w-full max-w-6xl gap-5 px-4 pb-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-center">
+          <section className="flex flex-col gap-3">
+            <div className="rounded-[2rem] border-4 border-white bg-white/80 p-5 text-center shadow-lg">
+              <div className="text-7xl font-black text-[#6d5cff]">{reps}<span className="text-2xl text-[#8a7f9e]"> / {target}</span></div>
+              <div className="mt-4 h-5 overflow-hidden rounded-full bg-[#e9e4ff]">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#6d5cff] to-[#06d6a0] transition-all duration-300" style={{ width: `${progress * 100}%` }} />
+              </div>
+              <p className="mt-4 text-xl font-black">Down ⬇️ then up ⬆️</p>
             </div>
-          )}
-        </div>
+            <div className="flex min-h-28 items-center gap-3 rounded-[1.75rem] border-2 border-white bg-white/65 p-3">
+              <Character state={mayaState} size={84} />
+              <p className="min-w-0 flex-1 text-lg font-extrabold leading-snug">{bubble}</p>
+            </div>
+            {mock && <div className="flex justify-center gap-2"><button onClick={() => setSquat(true)} className="rounded-xl bg-white px-4 py-3 font-black">⬇ Squat</button><button onClick={() => setSquat(false)} className="rounded-xl bg-white px-4 py-3 font-black">⬆ Stand</button></div>}
+          </section>
+          <section className="rounded-[2.25rem] border-4 border-white bg-white/55 p-3 shadow-xl">
+            <KidsCameraStage vision={vision} fit="contain" hint="Keep your head and feet inside the frame" className="aspect-[4/3] w-full min-h-[250px] sm:min-h-[420px]">
+              <div className={`absolute left-3 top-3 z-10 rounded-2xl px-4 py-2 font-black shadow-lg ${bodySeen ? "bg-emerald-100/95 text-emerald-700" : "bg-white/90 text-[#6d5cff]"}`}>{bodySeen ? "✓ Whole body found!" : "Step back a little…"}</div>
+            </KidsCameraStage>
+          </section>
+        </main>
       )}
 
       {phase === "complete" && (
-        <div className="flex flex-col items-center gap-4 anim-pop">
+        <main className="relative z-10 flex min-h-[calc(100dvh-76px)] flex-col items-center justify-center gap-4 px-5 pb-12 text-center anim-pop">
           <div className="text-6xl">🏆</div>
           <Character state="celebrating" message="AMAZING!" size={140} />
           <div className="text-2xl font-black text-[#3a3352]">{target} squats done!</div>
@@ -153,7 +173,7 @@ export default function SquatGame() {
             <button onClick={() => start(target)} className="px-6 py-2 rounded-full bg-[#6d5cff] text-white text-sm font-bold hover:bg-[#5a4ce6]">PLAY AGAIN</button>
             <button onClick={() => navigate("/move")} className="px-6 py-2 rounded-full bg-white text-[#3a3352] text-sm font-bold border border-[#eadff5]">CHOOSE ANOTHER GAME</button>
           </div>
-        </div>
+        </main>
       )}
     </div>
   );

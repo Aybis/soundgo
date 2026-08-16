@@ -15,37 +15,40 @@ interface Props {
  */
 export function CameraStartOverlay({ status, error, mock, onStart, onUseMock }: Props) {
   return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/50 backdrop-blur-sm">
-      <div className="text-2xl font-bold text-white">MAYA needs the camera 📷</div>
-      <div className="text-sm text-white/70 max-w-xs text-center leading-relaxed">
-        We play together with your camera — allow it when your browser asks!
-      </div>
+    <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-[#3a3352]/55 p-5 backdrop-blur-md">
+      <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-[2.25rem] border-4 border-white bg-[#fff8ed] px-6 py-7 text-center shadow-2xl sm:px-9">
+        <div className="grid h-20 w-20 place-items-center rounded-[1.75rem] bg-[#e9e4ff] text-4xl" aria-hidden="true">📷</div>
+        <div className="text-2xl font-black leading-tight text-[#3a3352] sm:text-3xl">Let Maya see your moves!</div>
+        <div className="max-w-xs text-base font-semibold leading-relaxed text-[#746a89]">
+          Ask a grown-up to help turn on the camera. Your video stays on this device.
+        </div>
 
       {status === "loading" && (
-        <div className="flex items-center gap-2 text-white/80 text-sm">
-          <span className="h-3 w-3 rounded-full border-2 border-white/50 border-t-transparent animate-spin" />
-          Turning on camera…
+        <div className="flex items-center gap-2 text-sm font-bold text-[#6d5cff]">
+          <span className="h-4 w-4 rounded-full border-2 border-[#6d5cff] border-t-transparent animate-spin" />
+          Waking up the camera…
         </div>
       )}
 
       {status === "error" && (
-        <div className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-400/30 text-red-200 text-xs max-w-xs text-center">
-          {error}
+        <div className="max-w-xs rounded-2xl border-2 border-[#ff9db8] bg-[#fff0f4] px-4 py-3 text-sm font-bold text-[#a53b5b]">
+          Camera needs help: {error}
         </div>
       )}
 
       {status !== "loading" && (
         <button
           onClick={onStart}
-          className="px-8 py-3 rounded-full bg-[#6d5cff] text-white font-semibold text-sm hover:bg-[#5a4ce6] transition-colors"
+          className="min-h-14 rounded-full bg-[#6d5cff] px-9 py-3 text-lg font-black text-white shadow-[0_6px_0_#4a3fd1] transition-all hover:bg-[#5a4ce6] active:translate-y-1 active:shadow-none"
         >
-          {status === "error" ? "Retry camera" : "Start camera"}
+          {status === "error" ? "TRY AGAIN" : "TURN ON CAMERA"}
         </button>
       )}
 
-      <button onClick={onUseMock} className="text-white/50 text-xs underline hover:text-white/80">
+      <button onClick={onUseMock} className="text-xs font-bold text-[#9a90ad] underline hover:text-[#6d5cff]">
         {mock ? "Using mock — switch to camera" : "Use mock (no camera) for testing"}
       </button>
+      </div>
     </div>
   );
 }
